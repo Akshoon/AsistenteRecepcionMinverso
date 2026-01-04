@@ -1,0 +1,41 @@
+PREGUNTA: Hola, Buenas tardes, Buenos días.
+RESPUESTA: Hola, buenas tardes. Bienvenido/a a Minverso. ¿En qué puedo ayudarte?
+
+PREGUNTA: ¿Esto es Minverso?, Minverso?, ¿Aquí es Minverso?, ¿Estoy en Minverso?
+RESPUESTA: Sí, estás en Minverso. ¿Vienes por una reunión, a dejar un pedido o necesitas hablar con alguien en particular?
+
+PREGUNTA: ¿Aquí también funciona Afel?, ¿Esto es Afel?, Afel?, ¿Afel en este edificio?, ¿Dónde está Afel?
+RESPUESTA: No, Afel también opera en este edificio pero en el piso 3. Debes bajar por el ascensor. Que tengas buen viaje. Saludos.
+
+PREGUNTA: Vengo a dejar un pedido a nombre de alguien, Vengo a dejar un paquete, Entregar un paquete.
+RESPUESTA: Perfecto. Por favor, indícame tu nombre y el de la persona que debe recibir el paquete.
+
+PREGUNTA: Busco a alguien, ¿se encuentra hoy en la oficina?, ¿Está alguien disponible hoy en la oficina?
+RESPUESTA: Un momento, por favor, voy a verificar su disponibilidad.
+
+PREGUNTA: Tengo una reunión, Tengo una reunión agendada con alguien, Vengo por una reunión.
+RESPUESTA: Perfecto. Voy a registrar tu llegada y avisar a la persona con la que tienes reunión.
+
+PREGUNTA: ¿Me pueden confirmar si la reunión está registrada en el calendario?, Vengo por una reunión, ¿me indican en qué sala es y a qué hora comienza?, Confirmar reunión.
+RESPUESTA: Sí, tu reunión está agendada. Puedes esperar aquí mientras avisamos a tu anfitrión.
+
+PREGUNTA: ¿Debo esperar aquí o puedo pasar?, ¿Puedo ingresar acompañado o debo esperar a que me vayan a buscar?, Debo esperar?
+RESPUESTA: Por favor, espera en la recepción. La persona con la que tienes reunión vendrá a buscarte en unos momentos.
+
+PREGUNTA: ¿Podrían avisarle a alguien que ya llegué?, ¿Cuánto tiempo se demora normalmente en avisar a la persona que vengo a ver?, Avisar a alguien que llegué.
+RESPUESTA: Ya se ha notificado tu llegada. Normalmente la respuesta toma solo unos minutos. Gracias por esperar.
+
+PREGUNTA: ¿Dónde puedo sentarme a esperar?, Dónde me puedo sentar.
+RESPUESTA: Puedes tomar asiento en el Showroom.
+
+PREGUNTA: ¿Dónde están los baños?, Baños, Dónde quedan los baños.
+RESPUESTA: Los baños están al fondo del pasillo, a mano derecha.
+
+PREGUNTA: ¿Hay Wi-Fi disponible para visitas?, Wi-Fi visitas, Contraseña Wi-Fi.
+RESPUESTA: Sí, puedes conectarte a la red Minverso-Visitas. La contraseña está visible en recepción.
+
+PREGUNTA: ¿Hay estacionamiento para visitas?, Estacionamiento visitas, Dónde puedo estacionar.
+RESPUESTA: No, no contamos con estacionamientos para visitas. Pero si necesitas estacionar, puedes hacerlo en el hotel NH Condell 40.
+
+PREGUNTA: ¿Hay algo más que deba hacer antes de entrar?, ¿Algo más que deba hacer?
+RESPUESTA: No, eso es todo. Gracias por esperar y bienvenido/a a Minverso.

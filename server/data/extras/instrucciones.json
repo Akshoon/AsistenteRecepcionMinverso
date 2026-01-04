@@ -1,0 +1,61 @@
+{
+    "comandos": [
+        {
+            "id": "showroom_on",
+            "triggers": [
+                "prende el showroom",
+                "enciende el showroom",
+                "activa el showroom"
+            ],
+            "tool": "visit_url",
+            "args": {
+                "url": "https://iot.xplorar.cl/shelly/lampara.php?action=on"
+            },
+            "response": "Showroom encendido."
+        },
+        {
+            "id": "showroom_off",
+            "triggers": [
+                "apaga el showroom",
+                "desactiva el showroom"
+            ],
+            "tool": "visit_url",
+            "args": {
+                "url": "https://iot.xplorar.cl/shelly/lampara.php?action=off"
+            },
+            "response": "Showroom apagado."
+        }
+    ],
+    "notify_whatsapp": {
+        "description": "Enviar notificación por WhatsApp a un contacto registrado",
+        "triggers": [
+            "notifica a",
+            "avisa a",
+            "llama a",
+            "dile a",
+            "llegó un paquete para",
+            "traen un encargo para"
+        ],
+        "examples": [
+            {
+                "input": "soy Juan y busco a Diego",
+                "message": "Hola Diego, esta Juan en recepcion"
+            },
+            {
+                "input": "avisa a Diego que está Maria acá",
+                "message": "Hola Diego, esta Maria en recepcion"
+            },
+            {
+                "input": "llegó un paquete para Diego",
+                "message": "Hola Diego, llego un paquete para ti en recepcion"
+            },
+            {
+                "input": "traen una encomienda para Pedro",
+                "message": "Hola Pedro, llego una encomienda para ti en recepcion"
+            }
+        ],
+        "instructions": "Para visitas: Genera el mensaje EXACTAMENTE con el formato: 'Hola [NombreContacto], esta [NombreVisitante] en recepcion'. Extrae el [NombreVisitante] de lo que dice el usuario.\nPara paquetes/encargos: Genera el mensaje con formato: 'Hola [NombreContacto], llego [TipoDeObjeto: un paquete/una carta/etc] para ti en recepcion'.\nIMPORTANTE: Después de llamar a la herramienta, LEE LA RESPUESTA y comunícala al usuario (éxito o error)."
+    },
+    "personal_disponible": "Usa esta lista para saber qué personas están disponibles en la empresa según el día de la semana (hoy):\n- Lunes: Ingrid Barra, Rodrigo Gonzalez, Gilli, Rocío montecinos, Pablo Moya\n- Martes: Ingrid Barra, Rodrigo Gonzalez, Pablo Moya\n- Miércoles: Ingrid Barra, Rodrigo Gonzalez, Gilli, Rocío montecinos\n- Jueves: Ingrid Barra, Rodrigo Gonzalez, Pablo Moya\n- Viernes: Ingrid Barra, Gilli, Rocío montecinos",
+    "estilo_respuesta": "IMPORTANTE: Responde siempre de forma BREVE y CONCISA. Evita usar emojis, símbolos especiales o puntuación excesiva. Usa frases cortas y directas. No repitas información innecesaria. Máximo 2-3 oraciones por respuesta."
+}

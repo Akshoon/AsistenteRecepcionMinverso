@@ -1,0 +1,120 @@
+MINVERSO - DESARROLLOS
+Home
+Desarrollos
+Contacto
+🌓
+Agendar Reunión
+Todos
+Capacitación
+Marketing
+Comunicaciones
+Operación
+Finning
+CAPACITACIÓN
+REALIDAD VIRTUAL
+Procedimientos Eléctricos CAEX
+
+Capacitación inmersiva de 12 procedimientos eléctricos de Camión eléctrico CAEX 798, que permite acelerar y adelantar el conocimiento del equipo. A la simulación pueden ingresar 18 personas en tiempo real, incluyendo a un instructor. Se desarrollaron gemelos digitales tanto del equipo como de su entorno, lo que permite visualizar sus componentes y recorrer sus distintas secciones. Esto facilita comprender su magnitud, altura y todos los aspectos relacionados con la faena, pero en un entorno completamente seguro. "Es fácil de usar y al estar fuera de la línea de fuego, no hay energías contenidas que puedan dañar a los trabajadores ni riesgos de caídas que puedan ocurrir. Además, permite mejorar la productividad. En la medida que no utilizan el camión para entrenar, éste sigue produciendo", señaló sobre la experiencia Carolina González, gerente Corporativo de Capacitación de Finning.
+
+Minverso
+OPERACIÓN
+REALIDAD MIXTA
+Centro Integrado de Operaciones
+
+Simulación de un Centro Integrado de Operaciones (CIO) con data en tiempo real, que permite a personas conectadas desde distintos lugares visualizar la misma información de forma simple y unificada, compartiendo un mismo espacio virtual y mejorando la coordinación para una toma de decisiones más eficiente.
+
+Utah University
+CAPACITACIÓN
+REALIDAD VIRTUAL
+Entrenamiento en Minería Subterránea
+
+En un entorno que simula cada detalle de una mina subterránea, alumnos de carreras de minería puedan practicar en equipo procedimientos propios de la labor minera, enfrentando desafíos extremos como rescates mineros, apagado de incendio y manejo de equipos. En la experiencia, los estudiantes deben seleccionar su equipo de seguridad y resolver desafíos en condiciones realistas, que incluyen humo, oscuridad que dificulta la visión y un marcador de oxígeno que disminuye con el tiempo. Todo debe lograrse dentro de un límite de tiempo, trabajando en equipo, y donde cada integrante tiene un rol clave para cumplir la misión. Esta metodología, que además reporta métricas de desempeño, no solo conecta mejor con las nuevas generaciones, sino que permite practicar en un entorno realista, repetir los errores y aprender de ellos sin enfrentar las consecuencias físicas, llegando mejor preparados para situaciones de emergencia.
+
+Anglo American
+COMUNICACIONES
+REALIDAD MIXTA
+Explorando Mina Los Bronces
+
+Desarrollo que permite un acercamiento conectado y cercano entre la comunidad y Mina Los Bronces, brindando a los usuarios la oportunidad de conocer en primera persona la operación de la mina y sumergirse en su entorno. La experiencia permite explorar la mina y sus minerales, interactuar con ellos y avanzar hacia una ventana a la mina, convirtiendo a las personas en protagonistas de la operación minera como espectadores inmersos en un entorno realista, observando camiones CAEX moverse justo frente a sus ojos. Finalmente, los usuarios pueden conducir un camión de extracción, mover la pala y operar el sistema, participando activamente en el proceso y completamente inmersos gracias a la realidad virtual.
+
+BHP
+COMUNICACIONES
+REALIDAD MIXTA
+La operación con Camiones Autónomos
+
+Desarrollo que explica de forma interactiva la historia y operación de Spence BHP, mostrando su contexto y acercando al usuario a sus procesos de autonomía. En la experiencia, es posible definir la ruta de sus camiones autónomos, desde la pala que carga el mineral hasta su depósito en el chancador primario, conectando de forma única a la operación con la mina.
+
+Dataverso
+CAPACITACIÓN
+REALIDAD VIRTUAL
+Dataverso, el metaverso para la geología
+
+Herramienta inmersiva para la geotecnia, geología, planificación y tronaduras, que permite la eficiencia de procesos en sus más diversas aristas, como coordinar, agilizar y planificar de forma más eficiente el trabajo en terreno en un ambiente controlado. La experiencia permite ver el estado actual del banco y hacer inspecciones de forma más eficiente, así como hacer un vuelo de alta resolución e ir viendo la condición del talud banco a banco: revisar la cresta, la condición geotécnica o hacer seguimiento estructural. Esto permite reducir considerablemente los tiempos de trabajo, más tiempo para revisar modelos, información, procesos y un menor tiempo en las tareas rutinarias de terreno.
+
+Gold Fields
+COMUNICACIONES
+REALIDAD MIXTA
+Inmersando Salares Norte
+
+Fusionamos el entorno físico con elementos virtuales interactivos, permitiendo aprendizaje, conexión y una comprensión real del aporte de Gold Fields a la comunidad y a la industria minera, conectando genuinamente con las personas. Este caso de éxito comunicacional quedó en evidencia durante la feria FOREDE 2025 en la región de Atacama.
+
+Orica
+CAPACITACIÓN
+VERSIÓN PC
+Capacitación para uso de explosivos PC
+
+Capacitación en computador para practicar procedimientos críticos asociados al uso de explosivos, mediante una simulación digital que replica fielmente el entorno real de trabajo y las acciones que se realizan en él. La experiencia se maneja únicamente con mouse y teclado, lo que permite una interacción inmediata, accesible y segura. El programa incluye 9 procedimientos prácticos, en los que se deben detectar anomalías, definir el orden correcto de los procesos e identificar riesgos, entre otros. Además, incorpora preguntas de selección múltiple, para medir el conocimiento adquirido.
+
+BHP
+COMUNICACIONES
+REALIDAD VIRTUAL
+REALIDAD MIXTA
+El Metaverso de Sierra Gorda
+
+SierraGorda, una de las comunas más remotas de Chile, dio un paso histórico al convertirse en la primera del país en llevar sus proyectos urbanos al metaverso, permitiendo una experiencia inmersiva y accesible que promueve la participación ciudadana real y una planificación urbana más eficiente. En la experiencia, las personas pueden recorrer de forma virtual espacios públicos, como la futura plaza y el nuevo terminal de buses, antes de que estén construidos y mejorar la coordinación entre las instituciones que desarrollan proyectos para la comuna.
+
+Orica
+CAPACITACIÓN
+REALIDAD VIRTUAL
+Capacitación para uso de explosivos
+
+Experiencia inmersiva dividida en 7 módulos interactivos, donde los trabajadores de Orica puedan practicar procedimientos críticos de uso de explosivos, permitiendo entregar sin riesgo físico, repetir los procesos tantas veces como sea necesario y llegar a terreno con mayor seguridad y preparación. Algunos de los procedimientos que pueden practicar incluyen delimitación de carguío, distribución de accesorios, primado, carguío, tapado, amarre y precorte, que pueden ser entrenados en solo 1 hora y 20 minutos en una experiencia que combinan realidad mixta y realidad virtual. El desarrollo, que fortalece competencias antes de enfrentar situaciones en terreno, está siendo utilizado en las oficinas de Orica de Chile, Perú y está testeándose en Portugal y Sudáfrica.
+
+ACHS
+CAPACITACIÓN
+REALIDAD VIRTUAL
+REALIDAD MIXTA
+Procedimiento de bloqueo y maniobras de segregación
+
+Desarrollo multiusuario que permite a los trabajadores practicar el procedimiento de bloqueo en una sala eléctrica virtual e interactuar con los elementos de un inventario sobre una mesa virtual que ofrece una vista aérea del rajo. En realidad mixta, los usuarios pueden realizar segregación, definir perímetros, diseñar rutas seguras y simular maniobras moviendo objetos dentro de una maqueta virtual. Posteriormente, ingresa a la sala de planificación en realidad virtual para practicar procedimientos y ver un molino en funcionamiento.
+
+FINNING
+CAPACITACIÓN
+REALIDAD VIRTUAL
+Simulación de Operación CAEX
+
+Entrenamiento inmersivo para conducción de camiones...
+
+LOS PELAMBRES
+CAPACITACIÓN
+REALIDAD VIRTUAL, SIMULACIÓN
+Procedimiento de bloqueo eléctrico del molino SAG
+
+Es uno de los procedimientos más complejos y peligrosos en la minería. Gracias al metaverso hemos logrado transformar su entrenamiento en una experiencia virtual inmersiva, que permite practicar sin riesgo de error.
+
+Contacto
+contacto@metaverso.cl
+Obispo Donoso 6 Oficina 601
+Providencia, Chile
+Agendar Reunión
+Redes
+YouTube
+•
+Instagram
+•
+Twitter
+•
+LinkedIn
+•
+TikTok
+© 2025 Minverso - Metaverso Minero. Creado en Chile.
