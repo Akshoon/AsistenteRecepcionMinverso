@@ -68,7 +68,18 @@ try {
 const formattedInstructions = Object.entries(instructions)
     .map(([key, value]) => {
         if (typeof value === 'object' && value.description) {
-            return `- ${key}: ${value.description}\n  Instrucciones: ${value.instructions || ''}`;
+            let formatted = `- ${key}: ${value.description}`;
+            if (value.instructions) {
+                formatted += `\n  Instrucciones: ${value.instructions}`;
+            }
+            // Si tiene comandos anidados, listar los triggers
+            if (value.commands && Array.isArray(value.commands)) {
+                const triggers = value.commands.flatMap(cmd => cmd.triggers || []);
+                if (triggers.length > 0) {
+                    formatted += `\n  Frases de activación: ${triggers.join(', ')}`;
+                }
+            }
+            return formatted;
         }
         return `- ${key}: ${value}`;
     })
@@ -80,14 +91,20 @@ Eres el asistente virtual de Minverso. Tu objetivo es ayudar a los usuarios con 
 FECHA Y HORA ACTUAL: ${new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' })}
 DIA DE LA SEMANA: ${new Date().toLocaleDateString('es-CL', { weekday: 'long', timeZone: 'America/Santiago' })}
 
+ESTILO DE RESPUESTA:
+- Responde de forma MUY BREVE y directa, máximo 1-2 oraciones.
+- No des explicaciones largas ni detalles innecesarios.
+- Si el tema tiene más información disponible, pregunta: "¿Quieres que te cuente más?"
+- Solo expande la información si el usuario lo pide explícitamente.
+- Evita emojis y símbolos especiales.
+
 Usa el siguiente contexto para responder preguntas:
 ${contextDocs}
 
 Instrucciones adicionales:
 ${formattedInstructions}
 
-Si te piden realizar una acción específica (como notificar o controlar el showroom), usa las HERRAMIENTAS disponibles.
-Responde de manera concisa y natural.
+Si te piden realizar una acción específica (como notificar o controlar dispositivos), usa las HERRAMIENTAS disponibles.
 `;
 
 // --- Inicializar Servicios ---
@@ -189,6 +206,96 @@ app.post('/api/whatsapp/send', async (req, res) => {
         res.json({ success: true, message: 'Message sent successfully' });
     } catch (error) {
         console.error('Error sending WhatsApp message:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- Configuration API Endpoints ---
+
+// Get current instructions configuration
+app.get('/api/config/instructions', (req, res) => {
+    try {
+        const instructionsPath = join(__dirname, 'data/extras/instrucciones.json');
+        if (!fs.existsSync(instructionsPath)) {
+            return res.status(404).json({ error: 'Configuration file not found' });
+        }
+
+        const data = fs.readFileSync(instructionsPath, 'utf-8');
+        const config = JSON.parse(data);
+        res.json(config);
+    } catch (error) {
+        console.error('Error reading configuration:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Save instructions configuration
+app.post('/api/config/instructions', (req, res) => {
+    try {
+        const instructionsPath = join(__dirname, 'data/extras/instrucciones.json');
+
+        // Validate JSON structure
+        const newConfig = req.body;
+        if (!newConfig || typeof newConfig !== 'object') {
+            return res.status(400).json({ error: 'Invalid configuration format' });
+        }
+
+        // Backup current file before saving
+        const backupPath = join(__dirname, 'data/extras/instrucciones.backup.json');
+        if (fs.existsSync(instructionsPath)) {
+            fs.copyFileSync(instructionsPath, backupPath);
+        }
+
+        // Save new configuration
+        fs.writeFileSync(instructionsPath, JSON.stringify(newConfig, null, 4), 'utf-8');
+        console.log('Configuration saved successfully');
+
+        res.json({ success: true, message: 'Configuration saved successfully' });
+    } catch (error) {
+        console.error('Error saving configuration:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get phone numbers
+app.get('/api/config/phones', (req, res) => {
+    try {
+        const phonePath = join(__dirname, 'data/extras/phone_number.json');
+        if (!fs.existsSync(phonePath)) {
+            return res.json({});
+        }
+
+        const data = fs.readFileSync(phonePath, 'utf-8');
+        const phones = JSON.parse(data);
+        res.json(phones);
+    } catch (error) {
+        console.error('Error reading phone numbers:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Save phone numbers
+app.post('/api/config/phones', (req, res) => {
+    try {
+        const phonePath = join(__dirname, 'data/extras/phone_number.json');
+
+        const newPhones = req.body;
+        if (!newPhones || typeof newPhones !== 'object') {
+            return res.status(400).json({ error: 'Invalid phone format' });
+        }
+
+        // Backup
+        const backupPath = join(__dirname, 'data/extras/phone_number.backup.json');
+        if (fs.existsSync(phonePath)) {
+            fs.copyFileSync(phonePath, backupPath);
+        }
+
+        fs.writeFileSync(phonePath, JSON.stringify(newPhones, null, 4), 'utf-8');
+        console.log('Phone numbers saved successfully');
+
+        res.json({ success: true, message: 'Phone numbers saved successfully' });
+    } catch (error) {
+        console.error('Error saving phone numbers:', error);
         res.status(500).json({ error: error.message });
     }
 });

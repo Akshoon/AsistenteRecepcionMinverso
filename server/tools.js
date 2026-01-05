@@ -98,19 +98,71 @@ export function createToolHandler(dependencies = {}) {
 
         if (name === "notify_whatsapp") {
             const phoneNumbers = loadPhoneNumbers();
+            const searchName = args.contactName.toLowerCase().trim();
+            const allContacts = Object.keys(phoneNumbers);
 
-            // Buscar contacto (case insensitive)
-            const contactKey = Object.keys(phoneNumbers).find(
-                key => key.toLowerCase() === args.contactName.toLowerCase()
-            );
+            console.log(`[Tools] Buscando contacto: "${args.contactName}" (normalizado: "${searchName}")`);
+            console.log(`[Tools] Contactos disponibles:`, allContacts);
 
+            let contactKey = null;
+            let matchType = 'none';
+
+            // 1. Buscar coincidencia EXACTA (case insensitive)
+            contactKey = allContacts.find(key => key.toLowerCase() === searchName);
+            if (contactKey) {
+                matchType = 'exact';
+                console.log(`[Tools] Match exacto encontrado: ${contactKey}`);
+            }
+
+            // 2. Si no hay exacta, buscar nombres que CONTENGAN el texto buscado
             if (!contactKey) {
-                console.error(`Contacto no encontrado: ${args.contactName}`);
+                const partialMatches = allContacts.filter(
+                    key => key.toLowerCase().includes(searchName) ||
+                        searchName.includes(key.toLowerCase())
+                );
+                console.log(`[Tools] Matches parciales:`, partialMatches);
+
+                if (partialMatches.length === 1) {
+                    contactKey = partialMatches[0];
+                    matchType = 'partial';
+                    console.log(`[Tools] Match parcial único: ${contactKey}`);
+                } else if (partialMatches.length > 1) {
+                    const options = partialMatches.join(', ');
+                    return {
+                        error: `Encontré varias personas: ${options}. ¿A cuál quieres notificar?`
+                    };
+                }
+            }
+
+            // 3. Búsqueda por primer nombre
+            if (!contactKey) {
+                const firstNameMatches = allContacts.filter(key => {
+                    const firstName = key.split(' ')[0].toLowerCase();
+                    return firstName === searchName;
+                });
+                console.log(`[Tools] Matches por primer nombre:`, firstNameMatches);
+
+                if (firstNameMatches.length === 1) {
+                    contactKey = firstNameMatches[0];
+                    matchType = 'firstName';
+                    console.log(`[Tools] Match por primer nombre: ${contactKey}`);
+                } else if (firstNameMatches.length > 1) {
+                    const options = firstNameMatches.join(', ');
+                    return {
+                        error: `Hay varias personas llamadas ${args.contactName}: ${options}. ¿A cuál le notificamos?`
+                    };
+                }
+            }
+
+            // 4. No encontrado
+            if (!contactKey) {
+                console.error(`[Tools] Contacto NO encontrado: ${args.contactName}`);
                 return {
-                    error: `Lo siento, no tengo registro de ${args.contactName} en mi lista de contactos.`
+                    error: `No encontré a "${args.contactName}". Contactos disponibles: ${allContacts.join(', ')}`
                 };
             }
 
+            console.log(`[Tools] Contacto final seleccionado: ${contactKey} (tipo: ${matchType})`);
             const phoneNumber = phoneNumbers[contactKey];
 
             // INTENTO DE ENVÍO SERVER-SIDE (si existe el servicio)
@@ -127,8 +179,12 @@ export function createToolHandler(dependencies = {}) {
                         // NO retornar error, dejar pasar al fallback
                     } else {
                         await whatsappService.sendMessage(phoneNumber, args.message);
+                        // Indicar claramente a quién se le notificó
+                        const notifiedName = contactKey !== args.contactName
+                            ? `${contactKey} (encontrado como "${args.contactName}")`
+                            : contactKey;
                         return {
-                            result: `Mensaje enviado correctamente a ${args.contactName}.`
+                            result: `Notificando a ${notifiedName}. Mensaje enviado.`
                         };
                     }
                 } catch (error) {
@@ -148,8 +204,8 @@ export function createToolHandler(dependencies = {}) {
                 result: "Notificación preparada para apertura en cliente",
                 whatsappUrl: whatsappUrl,
                 contactName: contactKey,
-                phoneNumber: phoneNumber, // Added phone number
-                message: args.message,    // Added message
+                phoneNumber: phoneNumber,
+                message: args.message,
                 action: "open_whatsapp"
             };
         }
