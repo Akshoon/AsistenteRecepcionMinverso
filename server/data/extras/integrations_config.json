@@ -1,0 +1,126 @@
+{
+    "version": "1.0.0",
+    "description": "Configuración de integraciones - WhatsApp y IoT activos",
+    "whatsapp_messaging": {
+        "enabled": true,
+        "headless": true,
+        "session_path": "./server/data/whatsapp-session",
+        "notes": "Mensajería WhatsApp funcional via Puppeteer"
+    },
+    "iot_lights": {
+        "enabled": true,
+        "devices": [
+            "showroom",
+            "lampara1",
+            "lampara2",
+            "lampara3"
+        ],
+        "notes": "Control de luces vía endpoints HTTP (Shelly)"
+    },
+    "calendar": {
+        "enabled": false,
+        "type": "google",
+        "credentials_path": null,
+        "team_calendar_id": null,
+        "notes": "Integrar con Google Calendar API o Microsoft Graph API"
+    },
+    "whatsapp_calls": {
+        "enabled": false,
+        "api_endpoint": null,
+        "api_key": null,
+        "notes": "Requiere WhatsApp Business API para llamadas"
+    },
+    "media_display": {
+        "enabled": true,
+        "media_path": "./server/data/media",
+        "supported_formats": {
+            "images": [
+                "jpg",
+                "jpeg",
+                "png",
+                "gif",
+                "webp"
+            ],
+            "videos": [
+                "mp4",
+                "webm",
+                "mov"
+            ]
+        },
+        "notes": "Listo para usar, requiere frontend integration"
+    },
+    "web_display": {
+        "enabled": true,
+        "allowed_domains": [],
+        "default_timeout_ms": 30000,
+        "notes": "Listo para usar, requiere frontend iframe"
+    },
+    "avatar_movements": {
+        "enabled": true,
+        "available_gestures": [
+            "wave",
+            "nod",
+            "shake_head",
+            "thinking",
+            "pointing",
+            "greeting",
+            "farewell"
+        ],
+        "idle_modes": [
+            "relaxed",
+            "attentive",
+            "sleeping"
+        ],
+        "notes": "Requiere integración con Avatar3D component"
+    },
+    "data_collection": {
+        "enabled": true,
+        "persist_to_db": false,
+        "db_type": null,
+        "db_connection": null,
+        "notes": "Almacenamiento en memoria por defecto"
+    },
+    "person_recognition": {
+        "enabled": false,
+        "provider": null,
+        "api_key": null,
+        "confidence_threshold": 0.8,
+        "notes": "Integrar con AWS Rekognition, Azure Face, u otro"
+    },
+    "iot_sensors": {
+        "doors": {
+            "enabled": false,
+            "devices": [],
+            "notes": "Integrar con Shelly, August, u otro"
+        },
+        "music": {
+            "enabled": false,
+            "provider": null,
+            "api_credentials": null,
+            "notes": "Integrar con Spotify, Sonos, o sistema local"
+        },
+        "cameras": {
+            "enabled": false,
+            "devices": [],
+            "facial_recognition": false,
+            "notes": "Integrar con cámaras IP/RTSP"
+        },
+        "elevator": {
+            "enabled": false,
+            "sensor_endpoint": null,
+            "notes": "Requiere sensor de puerta de ascensor"
+        },
+        "home_sensors": {
+            "enabled": false,
+            "provider": null,
+            "api_endpoint": null,
+            "notes": "Integrar con Home Assistant u otro"
+        }
+    },
+    "feature_flags": {
+        "enable_facial_dialogs": false,
+        "enable_auto_activation": false,
+        "enable_visitor_logging": false,
+        "enable_environment_awareness": false
+    }
+}

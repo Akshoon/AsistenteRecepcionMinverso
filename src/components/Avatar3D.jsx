@@ -190,7 +190,7 @@ export default function Avatar3D({ audioLevel = 0, lipSyncData = null }) {
             // 2. BOCA / LIP SYNC (Índices 0, 1, 2, 46, 47, 72)
             // CON SUAVIZADO para movimientos naturales
             // =====================================================
-            const GAIN = 1.0;
+            const GAIN = 1.8; // Aumentado para más movimiento de boca
             // Usar valores suavizados para movimientos fluidos
             const mouthOpen = (lipSyncData ? ls.mouthOpen : level) * GAIN;
             const mouthWide = (lipSyncData ? ls.mouthWide : 0) * GAIN;
@@ -203,19 +203,19 @@ export default function Avatar3D({ audioLevel = 0, lipSyncData = null }) {
 
             // APLICAR MOVIMIENTO DE BOCA a mesh facial
             if (isFaceMesh) {
-                // --- APERTURA PRINCIPAL (sutil, max 0.5) ---
-                set("Ah", Math.min(mouthOpen * 0.5, 0.5), 0.4);
-                set("Mouth_Drop_Lower", Math.min(mouthOpen * 0.2, 0.3), 0.3);
+                // --- APERTURA PRINCIPAL (más pronunciado) ---
+                set("Ah", Math.min(mouthOpen * 0.8, 0.8), 0.4);
+                set("Mouth_Drop_Lower", Math.min(mouthOpen * 0.5, 0.6), 0.3);
 
                 // --- FORMAS REDONDAS (O, U) ---
-                set("Oh", Math.min(lipsPursed * 0.5, 0.5), 0.4);
-                set("W_OO", Math.min(lipsPursed * 0.4, 0.5), 0.4);
-                set("Mouth_Pucker_Up_L", Math.min(lipsPursed * 0.25, 0.3), 0.3);
-                set("Mouth_Pucker_Up_R", Math.min(lipsPursed * 0.25, 0.3), 0.3);
+                set("Oh", Math.min(lipsPursed * 0.7, 0.7), 0.4);
+                set("W_OO", Math.min(lipsPursed * 0.6, 0.7), 0.4);
+                set("Mouth_Pucker_Up_L", Math.min(lipsPursed * 0.4, 0.5), 0.3);
+                set("Mouth_Pucker_Up_R", Math.min(lipsPursed * 0.4, 0.5), 0.3);
 
                 // --- FORMAS ANCHAS (E, I) ---
-                set("Mouth_Smile_L", Math.min(mouthWide * 0.2, 0.25), 0.4);
-                set("Mouth_Smile_R", Math.min(mouthWide * 0.2, 0.25), 0.4);
+                set("Mouth_Smile_L", Math.min(mouthWide * 0.4, 0.45), 0.4);
+                set("Mouth_Smile_R", Math.min(mouthWide * 0.4, 0.45), 0.4);
 
                 // --- CIERRE (M, B, P) ---
                 const isSilent = level < 0.08;

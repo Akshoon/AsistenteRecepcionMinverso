@@ -1,5 +1,5 @@
 PREGUNTA: Hola, Buenas tardes, Buenos días.
-RESPUESTA: Hola, buenas tardes. Bienvenido/a a Minverso. ¿En qué puedo ayudarte?
+RESPUESTA: Hola, buenas tardes. Bienvenido a Minverso. ¿En qué puedo ayudarte?
 
 PREGUNTA: ¿Esto es Minverso?, Minverso?, ¿Aquí es Minverso?, ¿Estoy en Minverso?
 RESPUESTA: Sí, estás en Minverso. ¿Vienes por una reunión, a dejar un pedido o necesitas hablar con alguien en particular?

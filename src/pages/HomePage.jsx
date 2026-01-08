@@ -521,6 +521,16 @@ function HomePage() {
           setVisitorPhone('');
         } else if (data.type === 'whatsapp_error') {
           alert('Error enviando mensaje: ' + data.error);
+        } else if (data.type === 'command_response') {
+          // Respuesta de comando - usar TTS del navegador
+          console.log('🎯 Comando ejecutado:', data.text);
+
+          // Reproducir con TTS del navegador
+          if (data.useTTS && browserTTSRef.current) {
+            browserTTSRef.current.speak(data.text).catch(err => {
+              console.error('Error en Browser TTS:', err);
+            });
+          }
         } else if (data.type === 'interrupted') {
           // Interrupción desde el servidor
           stopPlayback();
@@ -544,6 +554,9 @@ function HomePage() {
     }
   }, [playAudioQueue, setAudioLevel, stopPlayback]);
 
+  // Speech Recognition Ref
+  const recognitionRef = useRef(null);
+
   // Procesar y enviar audio del micrófono
   const startRecording = useCallback(async () => {
     if (!mediaStreamRef.current || !wsRef.current) {
@@ -556,6 +569,41 @@ function HomePage() {
     setIsRecording(true);
     setStatus('Escuchando...');
 
+    // === INICIAR WEB SPEECH API (STT CLIENTE) ===
+    if ('webkitSpeechRecognition' in window) {
+      console.log('🎤 Iniciando reconocimiento de voz (Client-Side STT)...');
+      const recognition = new window.webkitSpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'es-ES';
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[event.results.length - 1][0].transcript;
+        console.log('🎤 STT Final:', transcript);
+
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'client_transcript', // Nuevo tipo de mensaje para el server
+            text: transcript
+          }));
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.warn('⚠️ Error en Speech Recognition:', event.error);
+      };
+
+      try {
+        recognition.start();
+        recognitionRef.current = recognition;
+      } catch (e) {
+        console.error("Error al iniciar recognition:", e);
+      }
+    } else {
+      console.warn("⚠️ Web Speech API no soportada en este navegador.");
+    }
+
+
     const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
     const source = audioContext.createMediaStreamSource(mediaStreamRef.current);
 
@@ -565,7 +613,6 @@ function HomePage() {
 
     // Buffer de tiempo para evitar eco residual después de que el avatar termina de hablar
     let lastAvatarSpeakTime = 0;
-    const ECHO_BUFFER_MS = 600; // Esperar 600ms después de que el avatar termine
 
     processor.onaudioprocess = (event) => {
       // Usar ref en lugar de state para el check
@@ -591,37 +638,33 @@ function HomePage() {
         lastAvatarSpeakTime = Date.now();
       }
 
-      // Verificar si estamos en el buffer de eco (avatar terminó recientemente)
-      const timeSinceAvatarSpoke = Date.now() - lastAvatarSpeakTime;
-      const inEchoBuffer = lastAvatarSpeakTime > 0 && timeSinceAvatarSpoke < ECHO_BUFFER_MS;
+      // BUFFER DE ECO: Solo bloquear si el avatar está hablando activamente
+      // Eliminado ECHO_BUFFER_MS para respuesta más rápida
 
-      // BLOQUEO TOTAL: Si el avatar está hablando, NO enviar audio (excepto barge-in fuerte)
+      // BLOQUEO TOTAL: Si el avatar está hablando, NO enviar audio (Half-Duplex estricto)
       if (isAvatarSpeaking) {
-        // Solo permitir barge-in si el usuario habla MUY fuerte (interrupción intencional)
-        const BARGE_IN_THRESHOLD = 0.15; // Muy alto para evitar eco
-        if (rms < BARGE_IN_THRESHOLD) {
-          return; // Ignorar - es eco del avatar
-        }
-        // Si supera barge-in, el servidor detectará la interrupción
-      }
-
-      // BUFFER DE ECO: Después de que el avatar termina, esperar un poco
-      if (inEchoBuffer) {
-        const RECOVERY_THRESHOLD = 0.08; // Umbral medio durante recuperación
-        if (rms < RECOVERY_THRESHOLD) {
-          return; // Ignorar - posible eco residual
-        }
+        return; // Silencio absoluto del mic durante reproducción
       }
 
       // Umbral normal cuando no hay eco
-      const NORMAL_THRESHOLD = 0.008;
-      if (rms < NORMAL_THRESHOLD) {
-        return; // Silencio, no enviar
-      }
+      const NORMAL_THRESHOLD = 0.02; // Ajustado para filtrar ruido ambiente
 
-      const pcmData = new Int16Array(inputData.length);
-      for (let i = 0; i < inputData.length; i++) {
-        pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+      // === DIGITAL NOISE GATE ===
+      // Si el volumen es menor al umbral, enviamos SILENCIO (zeros)
+      // Esto es CRÍTICO para que el VAD de Gemini detecte que "dejaste de hablar"
+      // Si simplemente cortamos el envío (return), Gemini se queda esperando.
+
+      let pcmData;
+
+      if (rms < NORMAL_THRESHOLD) {
+        // Enviar silencio absoluto (zeros)
+        pcmData = new Int16Array(inputData.length); // Se inicializa en 0 por defecto
+      } else {
+        // Enviar audio real
+        pcmData = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+        }
       }
 
       // Convertir a base64 y enviar
@@ -647,6 +690,18 @@ function HomePage() {
   // Detener grabación
   const stopRecording = useCallback(() => {
     isRecordingRef.current = false; // Detener el callback primero
+
+    // Detener Web Speech API
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+        console.log('🎤 Reconocimiento de voz detenido.');
+      } catch (e) {
+        console.warn('Error al detener recognition:', e);
+      }
+      recognitionRef.current = null;
+    }
+
     if (processorRef.current) {
       processorRef.current.processor.disconnect();
       processorRef.current.audioContext.close();
@@ -706,10 +761,14 @@ function HomePage() {
       const data = await response.json();
 
       if (data.status === 'waiting_qr') {
+        console.log('Status is waiting_qr, fetching QR code...');
         // Obtener QR code
         const qrResponse = await fetch('http://localhost:3000/api/whatsapp/qr');
         const qrData = await qrResponse.json();
+        console.log('QR Response data:', qrData ? 'Data received' : 'No data');
+
         if (qrData.qr) {
+          console.log('QR Code received, setting state...');
           setQrCode(qrData.qr);
           setShowQRModal(true);
 
@@ -724,6 +783,8 @@ function HomePage() {
               clearInterval(checkAuth);
             }
           }, 2000);
+        } else {
+          console.warn('QR Data has no qr property:', qrData);
         }
       } else if (data.status === 'authenticated') {
         const statusResponse = await fetch('http://localhost:3000/api/whatsapp/status');
@@ -884,8 +945,9 @@ function HomePage() {
                 }}>
                   Esperando QR...
                 </span>
-                <div
-                  title="Esperando autenticación WhatsApp..."
+                <button
+                  onClick={initializeWhatsApp}
+                  title="Clic para ver código QR"
                   style={{
                     width: '40px',
                     height: '40px',
@@ -896,11 +958,15 @@ function HomePage() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '18px',
-                    backdropFilter: 'blur(5px)'
+                    backdropFilter: 'blur(5px)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
                   }}
+                  onMouseEnter={(e) => e.target.style.background = 'rgba(255,165,0,0.5)'}
+                  onMouseLeave={(e) => e.target.style.background = 'rgba(255,165,0,0.3)'}
                 >
                   ⏳
-                </div>
+                </button>
               </>
             )}
           </>

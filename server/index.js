@@ -9,6 +9,7 @@ import { LLMFactory } from './services/llm/LLMFactory.js';
 import { ElevenLabsTTS } from './services/tts/ElevenLabsTTS.js';
 import { WhatsAppService } from './services/whatsapp/WhatsAppService.js';
 import { createToolHandler } from './tools.js';
+import { initializeServices, getIoTService, getDataService, serviceRegistry } from './services/initServices.js';
 
 dotenv.config();
 
@@ -65,6 +66,17 @@ try {
     console.warn('Error cargando instrucciones.json:', error.message);
 }
 
+let phoneNumbers = {};
+try {
+    const phonesPath = join(__dirname, 'data/extras/phone_number.json');
+    if (fs.existsSync(phonesPath)) {
+        phoneNumbers = JSON.parse(fs.readFileSync(phonesPath, 'utf-8'));
+        console.log('Teléfonos cargados desde extras/phone_number.json');
+    }
+} catch (error) {
+    console.warn('Error cargando phone_number.json:', error.message);
+}
+
 const formattedInstructions = Object.entries(instructions)
     .map(([key, value]) => {
         if (typeof value === 'object' && value.description) {
@@ -72,17 +84,23 @@ const formattedInstructions = Object.entries(instructions)
             if (value.instructions) {
                 formatted += `\n  Instrucciones: ${value.instructions}`;
             }
-            // Si tiene comandos anidados, listar los triggers
+            // Si tiene comandos anidados, listar los triggers y sus detalles
             if (value.commands && Array.isArray(value.commands)) {
-                const triggers = value.commands.flatMap(cmd => cmd.triggers || []);
-                if (triggers.length > 0) {
-                    formatted += `\n  Frases de activación: ${triggers.join(', ')}`;
-                }
+                value.commands.forEach(cmd => {
+                    formatted += `\n  - Comando: "${cmd.id}"`;
+                    formatted += `\n    Frases: ${cmd.triggers.join(', ')}`;
+                    formatted += `\n    Respuesta sugerida: "${cmd.response}"`;
+                    formatted += `\n    Acción: Tool "${cmd.tool}" con args ${JSON.stringify(cmd.args)}`;
+                });
             }
             return formatted;
         }
         return `- ${key}: ${value}`;
     })
+    .join('\n');
+
+const formattedContacts = Object.entries(phoneNumbers)
+    .map(([name, number]) => `- ${name}: ${number}`)
     .join('\n');
 
 const SYSTEM_INSTRUCTION = `
@@ -104,7 +122,10 @@ ${contextDocs}
 Instrucciones adicionales:
 ${formattedInstructions}
 
-Si te piden realizar una acción específica (como notificar o controlar dispositivos), usa las HERRAMIENTAS disponibles.
+CONTACTOS DISPONIBLES (Para notificaciones de WhatsApp):
+${formattedContacts}
+
+Si te piden realizar una acción específica (como notificar o controlar dispositivos), CONFIRMA que lo harás.
 `;
 
 // --- Inicializar Servicios ---
@@ -172,6 +193,7 @@ app.get('/api/whatsapp/status', async (req, res) => {
 
 // Obtener código QR
 app.get('/api/whatsapp/qr', async (req, res) => {
+    console.log('GET /api/whatsapp/qr request received');
     if (!whatsappService) {
         return res.status(503).json({ error: 'WhatsApp service not enabled' });
     }
@@ -179,12 +201,14 @@ app.get('/api/whatsapp/qr', async (req, res) => {
     try {
         const qrCode = await whatsappService.getQRCode();
         if (qrCode) {
+            console.log('Sending QR code to client (length: ' + qrCode.length + ')');
             res.json({ qr: qrCode });
         } else {
+            console.log('No QR code returned from service');
             res.json({ qr: null, message: 'No QR code available (already authenticated)' });
         }
     } catch (error) {
-        console.error('Error getting QR code:', error);
+        console.error('Error in /api/whatsapp/qr:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -300,6 +324,111 @@ app.post('/api/config/phones', (req, res) => {
     }
 });
 
+// --- IoT API Endpoints ---
+
+// Listar dispositivos IoT
+app.get('/api/iot/devices', (req, res) => {
+    const iotService = getIoTService();
+    if (!iotService) {
+        return res.status(503).json({ error: 'IoT service not available' });
+    }
+    res.json(iotService.listDevices());
+});
+
+// Estado de dispositivo específico
+app.get('/api/iot/devices/:id', (req, res) => {
+    const iotService = getIoTService();
+    if (!iotService) {
+        return res.status(503).json({ error: 'IoT service not available' });
+    }
+
+    const device = iotService.getDeviceStatus(req.params.id);
+    if (!device) {
+        return res.status(404).json({ error: 'Device not found' });
+    }
+    res.json(device);
+});
+
+// Ejecutar acción en dispositivo
+app.post('/api/iot/devices/:id/:action', async (req, res) => {
+    const iotService = getIoTService();
+    if (!iotService) {
+        return res.status(503).json({ error: 'IoT service not available' });
+    }
+
+    const { id, action } = req.params;
+    const result = await iotService.executeAction(id, action);
+
+    if (result.error) {
+        return res.status(400).json(result);
+    }
+    res.json(result);
+});
+
+// Historial de comandos IoT
+app.get('/api/iot/history', (req, res) => {
+    const iotService = getIoTService();
+    if (!iotService) {
+        return res.status(503).json({ error: 'IoT service not available' });
+    }
+
+    const limit = parseInt(req.query.limit) || 10;
+    res.json(iotService.getHistory(limit));
+});
+
+// --- Integrations Config API ---
+
+// Get integrations configuration
+app.get('/api/config/integrations', (req, res) => {
+    try {
+        const configPath = join(__dirname, 'data/extras/integrations_config.json');
+        if (!fs.existsSync(configPath)) {
+            return res.status(404).json({ error: 'Integrations config not found' });
+        }
+        const data = fs.readFileSync(configPath, 'utf-8');
+        res.json(JSON.parse(data));
+    } catch (error) {
+        console.error('Error reading integrations config:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Save integrations configuration
+app.post('/api/config/integrations', (req, res) => {
+    try {
+        const configPath = join(__dirname, 'data/extras/integrations_config.json');
+        const backupPath = join(__dirname, 'data/extras/integrations_config.backup.json');
+
+        // Backup
+        if (fs.existsSync(configPath)) {
+            fs.copyFileSync(configPath, backupPath);
+        }
+
+        fs.writeFileSync(configPath, JSON.stringify(req.body, null, 4), 'utf-8');
+        console.log('Integrations config saved');
+
+        res.json({ success: true, message: 'Integrations config saved' });
+    } catch (error) {
+        console.error('Error saving integrations config:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- Services Status API ---
+
+// Estado de todos los servicios
+app.get('/api/services/status', (req, res) => {
+    res.json(serviceRegistry.getStatus());
+});
+
+// --- Inicializar Servicios ---
+console.log('\n📦 Inicializando servicios...');
+initializeServices({ whatsappService }).then(() => {
+    console.log('✅ Servicios inicializados\n');
+}).catch(err => {
+    console.error('⚠️ Error inicializando servicios:', err);
+});
+
 // --- Iniciar Servidor ---
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n Servidor iniciado en puerto ${PORT}`);
@@ -313,29 +442,39 @@ console.log(`Documentos cargados en contexto: ${contextDocs.length} caracteres`)
 wss.on('connection', async (ws) => {
     console.log('Cliente conectado');
 
-    // Crear handler de herramientas con servicios inyectados
-    const toolHandler = createToolHandler({ whatsappService });
+    // Obtener servicios del registro
+    const iotService = getIoTService();
+    const dataService = getDataService();
 
-    // Configurar modo de voz
-    const useElevenLabs = ttsService.isConfigured();
-    console.log(`Modo de voz: ${useElevenLabs ? 'ElevenLabs' : 'Silencio (ElevenLabs no configurado)'}`);
+    // Crear handler de herramientas con todos los servicios inyectados
+    const toolHandler = createToolHandler({
+        whatsappService,
+        iotService,
+        dataService
+    });
 
-    // Notificar conexión
-    ws.send(JSON.stringify({
-        type: 'connected',
-        voiceMode: useElevenLabs ? 'elevenlabs' : 'none',
-        whatsappStatus: whatsappService ? whatsappService.getStatus() : null
-    }));
+    // ===== ARQUITECTURA DE DOS MODELOS (STREAMING) =====
+    // 1. audioService: gemini-2.5-flash-native-audio-preview (LIVE - STT/TTS)
+    // 2. llmService: gemini-2.5-flash (request/response - lógica + tools)
 
-    // Inicializar LLM Service por conexión
+    // --- Inicializar LLM Service (texto + tools) ---
     const llmService = LLMFactory.createLLM('gemini', {
         apiKey: process.env.GOOGLE_API_KEY,
         systemInstruction: SYSTEM_INSTRUCTION,
         toolHandler: toolHandler
     });
 
+    // --- Inicializar Audio Service (STT/TTS STREAMING) ---
+    const audioService = LLMFactory.createAudioService({
+        apiKey: process.env.GOOGLE_API_KEY
+    });
+
+    let useFallbackTTS = ttsService.isConfigured();
+    let isProcessingLLM = false;
+
     try {
         await llmService.initialize();
+        console.log('LLM Service (gemini-2.5-flash) inicializado');
     } catch (error) {
         console.error("Error inicializando LLM:", error);
         ws.send(JSON.stringify({ type: 'error', message: 'Error inicializando IA' }));
@@ -343,11 +482,158 @@ wss.on('connection', async (ws) => {
         return;
     }
 
-    // Iniciar Chat
+    // Iniciar Chat Session
     const chatSession = await llmService.startChat();
 
+    // --- Configurar callbacks del Audio Service ---
 
-    // --- Gestión de Audio y Cola ---
+    // === DETECCIÓN DE COMANDOS ===
+    // Función para detectar si el transcript es un comando que requiere tools
+    const detectCommand = (text) => {
+        const lowerText = text.toLowerCase();
+
+        // Patrones de comandos IoT
+        const iotPatterns = [
+            /prende|enciende|activa/i,
+            /apaga|desactiva/i,
+            /showroom/i,
+            /l[áa]mpara|luz/i
+        ];
+
+        // Patrones de comandos WhatsApp
+        const whatsappPatterns = [
+            /avisa|notifica|comunica|dile|avisale/i,
+            /llama a|contacta a|manda mensaje/i,
+            /lleg[óo].*paquete|encargo|encomienda/i,
+            /busco a|busca a/i,
+            /est[áa].*en recepci[óo]n/i,
+            /visita.*para|lleg[óo].*visita/i
+        ];
+
+        const hasIoT = iotPatterns.some(p => p.test(lowerText));
+        const hasWhatsApp = whatsappPatterns.some(p => p.test(lowerText));
+
+        return hasIoT || hasWhatsApp;
+    };
+
+    // Callback: Cuando llega pensamiento del modelo (Hybrid Trigger)
+    // DESACTIVADO POR REDUNDANCIA: Ya tenemos el STT del cliente que es más preciso.
+    /*
+    audioService.setThoughtCallback(async (thoughtText) => {
+        console.log(`[THOUGHT] Recibido: "${thoughtText}"`);
+        // ... (lógica deshabilitada) ...
+    });
+    */
+
+    // Callback: Cuando llega transcripción (STT) - Mantenemos esto por si acaso llega STT real
+    audioService.setTranscriptCallback(async (transcript) => {
+        console.log(`[TRANSCRIPT] Recibido: "${transcript}"`);
+
+        if (!transcript || transcript.trim() === '') {
+            return;
+        }
+
+        console.log(`=== TRANSCRIPCIÓN: "${transcript}" ===`);
+
+        // HÍBRIDO: Enviar al flash en PARALELO para detectar tools
+        // El native-audio ya está respondiendo naturalmente
+        // Si flash usa un tool, interrumpimos y enviamos esa respuesta
+
+        // No bloquear - ejecutar en background
+        (async () => {
+            try {
+                let toolWasUsed = false;
+
+                const response = await llmService.sendMessage({
+                    text: transcript,
+                    chatSession: chatSession,
+                    onToolAction: (toolName, result) => {
+                        toolWasUsed = true;
+                        console.log(`[TOOL] ${toolName} ejecutado - interrumpiendo native-audio`);
+
+                        if (result && result.action === 'open_whatsapp' && result.whatsappUrl) {
+                            ws.send(JSON.stringify({
+                                type: 'whatsapp_notification',
+                                url: result.whatsappUrl,
+                                contactName: result.contactName || 'Contacto'
+                            }));
+                        }
+                    }
+                });
+
+                // Solo enviar respuesta de flash si usó un tool
+                // Si no usó tool, native-audio ya respondió naturalmente
+                if (toolWasUsed && response.text) {
+                    console.log(`[HYBRID] Tool usado, enviando respuesta flash a TTS: "${response.text}"`);
+                    if (audioService.isReady()) {
+                        audioService.sendTextForTTS(response.text);
+                    } else {
+                        ws.send(JSON.stringify({ type: 'text', text: response.text }));
+                    }
+                } else {
+                    console.log(`[HYBRID] Sin tools, native-audio manejó la respuesta`);
+                }
+
+            } catch (error) {
+                console.error('Error en verificación de tools:', error.message);
+            }
+        })();
+    });
+
+    // Callback: Cuando llega audio de TTS
+    audioService.setAudioCallback((audioChunk) => {
+        // Enviar chunk de audio al cliente
+        ws.send(JSON.stringify({
+            type: 'audio',
+            data: audioChunk.toString('base64')
+        }));
+    });
+
+    // Callback: Cuando hay error
+    audioService.setErrorCallback((error) => {
+        console.error('Audio Service error:', error);
+    });
+
+    // Callback: Cuando se interrumpe
+    audioService.setInterruptedCallback(() => {
+        ws.send(JSON.stringify({ type: 'interrupted' }));
+    });
+
+    // Callback: Cuando se desconecta (sesión cerrada por servidor)
+    audioService.setCloseCallback(async () => {
+        console.warn('⚠️ Audio Service desconectado por el servidor remoto.');
+        // Solo intentar reconectar si el socket del cliente sigue abierto
+        if (ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify({ type: 'status', status: 'reconnecting', message: 'Reconectando servicio de voz...' }));
+
+            // Intentar reconectar
+            try {
+                await audioService.connect(SYSTEM_INSTRUCTION);
+                ws.send(JSON.stringify({ type: 'status', status: 'connected', message: 'Servicio de voz reconectado' }));
+                console.log('✅ Audio Service reconectado exitosamente');
+            } catch (e) {
+                console.error('❌ Fallo al reconectar Audio Service:', e);
+                ws.send(JSON.stringify({ type: 'error', message: 'La sesión de voz se perdió y no pudo recuperarse.' }));
+            }
+        }
+    });
+
+    // --- Intentar conectar Audio Service (LIVE session) ---
+    try {
+        await audioService.connect(SYSTEM_INSTRUCTION);
+        console.log('Audio Service LIVE conectado con system instruction');
+    } catch (error) {
+        console.warn('Audio Service no disponible:', error.message);
+    }
+
+    // Notificar conexión al cliente
+    ws.send(JSON.stringify({
+        type: 'connected',
+        voiceMode: audioService.isReady() ? 'native' : (useFallbackTTS ? 'elevenlabs' : 'none'),
+        whatsappStatus: whatsappService ? whatsappService.getStatus() : null
+    }));
+
+    // --- Gestión de Audio del Mic ---
     function calculateRMS(buffer) {
         const int16Data = new Int16Array(buffer.buffer, buffer.byteOffset, buffer.length / 2);
         let sum = 0;
@@ -358,137 +644,124 @@ wss.on('connection', async (ws) => {
         return Math.sqrt(sum / int16Data.length);
     }
 
-    let audioChunks = [];
-    let silenceTimer = null;
+    // Estado para tracking de audio (solo para logging)
     let isSpeaking = false;
-    const messageQueue = [];
-    let isProcessingQueue = false;
-
-    const processQueue = async () => {
-        if (isProcessingQueue || messageQueue.length === 0) return;
-        isProcessingQueue = true;
-
-        const currentAudioBuffer = messageQueue.shift();
-        console.log(`Procesando audio de la cola (${currentAudioBuffer.length} chunks)...`);
-
-        try {
-            // Unir chunks
-            const buffers = currentAudioBuffer.map(chunk => Buffer.from(chunk, 'base64'));
-            const finalPcmBuffer = Buffer.concat(buffers);
-
-            // Llamar al LLM
-            console.log('Enviando audio a LLM...');
-            const response = await llmService.sendMessage({
-                audio: finalPcmBuffer,
-                chatSession: chatSession,
-                onToolAction: (toolName, result) => {
-                    // Manejo específico de efectos secundarios en el cliente
-                    if (result && result.action === 'open_whatsapp' && result.whatsappUrl) {
-                        console.log(`Enviando comando de apertura de WhatsApp a cliente`);
-                        ws.send(JSON.stringify({
-                            type: 'whatsapp_notification',
-                            url: result.whatsappUrl,
-                            contactName: result.contactName || 'Contacto'
-                        }));
-                    }
-                }
-            });
-
-            console.log('IA respondió:', response.text || '(Audio respuesta)');
-
-            if (response.text) {
-                ws.send(JSON.stringify({ type: 'text', text: response.text }));
-            }
-
-            // TTS con ElevenLabs
-            if (useElevenLabs && response.text) {
-                try {
-                    console.log('Enviando a ElevenLabs...');
-                    const audioBuffer = await ttsService.textToSpeech(response.text);
-                    const audioBase64 = audioBuffer.toString('base64');
-                    ws.send(JSON.stringify({
-                        type: 'elevenlabs_audio',
-                        data: audioBase64
-                    }));
-                    console.log('Audio ElevenLabs enviado');
-                } catch (e) {
-                    console.error('Error ElevenLabs:', e);
-                }
-            }
-
-        } catch (error) {
-            console.error('Error en proceso LLM:', error);
-            ws.send(JSON.stringify({ type: 'error', message: 'Error procesando solicitud' }));
-        } finally {
-            isProcessingQueue = false;
-            if (messageQueue.length > 0) {
-                processQueue();
-            }
-        }
-    };
+    let silenceTimer = null;
 
     ws.on('message', async (data) => {
         try {
             const message = JSON.parse(data);
+
             if (message.type === 'audio') {
                 const chunkBuffer = Buffer.from(message.data, 'base64');
-                const rms = calculateRMS(chunkBuffer);
-                const SILENCE_THRESHOLD = 0.01;
 
-                if (rms > SILENCE_THRESHOLD) {
-                    // DETECTAR INTERRUPCIÓN: Si el usuario empieza a hablar, notificar al cliente para que se calle
-                    if (!isSpeaking) {
-                        isSpeaking = true;
-                        // Enviar señal de interrupción inmediata
-                        ws.send(JSON.stringify({ type: 'interrupted' }));
+                // ===== STREAMING EN TIEMPO REAL =====
+                // Enviar TODOS los chunks inmediatamente al modelo
+                // Incluyendo silencio - el VAD del modelo necesita el silencio
+                // para detectar cuando el usuario termina de hablar
+                if (audioService.isReady()) {
+                    const sent = audioService.sendAudioChunk(chunkBuffer);
+                    if (!sent) {
+                        console.warn('[AUDIO] No se pudo enviar chunk: AudioService desconectado');
                     }
+                }
 
-                    if (silenceTimer) clearTimeout(silenceTimer);
+                // Logging opcional (solo para debug)
+                const rms = calculateRMS(chunkBuffer);
+                if (rms > 0.01 && !isSpeaking) {
+                    isSpeaking = true;
+                    console.log('[AUDIO] Usuario comenzó a hablar');
+                } else if (rms <= 0.01 && isSpeaking) {
+                    isSpeaking = false;
+                    console.log('[AUDIO] Usuario dejó de hablar');
+                }
 
-                    silenceTimer = setTimeout(() => {
-                        isSpeaking = false;
-                        if (audioChunks.length > 0) {
-                            messageQueue.push([...audioChunks]);
-                            audioChunks = [];
-                            processQueue();
+            } else if (message.type === 'client_transcript') {
+                // Nuevo handling para STT del cliente (Hybrid Tool Trigger)
+                const transcript = message.text;
+                console.log(`[CLIENT-TRANSCRIPT] Recibido de Web Speech API: "${transcript}"`);
+
+                if (!transcript || transcript.trim() === '') return;
+
+                // Enviar al modelo Flash para detectar tools
+                // No esperamos respuesta de audio, solo ejecución de tools
+                (async () => {
+                    try {
+                        let toolWasUsed = false;
+
+                        // Contexto explícito para el modelo de tools
+                        const toolInput = `El usuario dijo: "${transcript}". Si es un comando (luces, whatsapp, etc), ejecútalo. Si es charla normal, IGNORA.`;
+
+                        const response = await llmService.sendMessage({
+                            text: toolInput,
+                            chatSession: chatSession, // Mantener contexto
+                            onToolAction: (toolName, result) => {
+                                toolWasUsed = true;
+                                console.log(`[TOOL-HYBRID] ${toolName} ejecutado (origen: Client STT)`);
+
+                                if (result && result.action === 'open_whatsapp' && result.whatsappUrl) {
+                                    // MODIFICACIÓN: SUPRIMIR POPUP
+                                    // Originalmente enviábamos 'whatsapp_notification' que abría window.open
+                                    // Ahora solo logueamos que se generó la URL, pero no la abrimos en el cliente
+                                    console.log(`[HYBRID] Popup suprimido. URL generada: ${result.whatsappUrl}`);
+                                    /*
+                                    ws.send(JSON.stringify({
+                                        type: 'whatsapp_notification',
+                                        url: result.whatsappUrl,
+                                        contactName: result.contactName || 'Contacto'
+                                    }));
+                                    */
+                                }
+                            }
+                        });
+
+                        if (toolWasUsed) {
+                            console.log('[HYBRID] Tool ejecutado exitosamente via Client STT');
+                            // Opcional: Feedback verbal si es crítico
                         }
-                    }, 1000);
-                }
 
-                if (isSpeaking) {
-                    audioChunks.push(message.data);
-                }
+                    } catch (error) {
+                        console.error('Error procesando Client Transcript:', error);
+                    }
+                })();
+
             } else if (message.type === 'text') {
-                // Manejar entrada de texto directo (para debug/chat)
+                // Entrada de texto directo (debug/chat)
                 console.log('Recibido texto:', message.text);
+
                 const response = await llmService.sendMessage({
                     text: message.text,
-                    chatSession: chatSession
+                    chatSession: chatSession,
+                    onToolAction: (toolName, result) => {
+                        if (result && result.action === 'open_whatsapp' && result.whatsappUrl) {
+                            ws.send(JSON.stringify({
+                                type: 'whatsapp_notification',
+                                url: result.whatsappUrl,
+                                contactName: result.contactName || 'Contacto'
+                            }));
+                        }
+                    }
                 });
 
-                // Enviar respuesta
                 ws.send(JSON.stringify({ type: 'text', text: response.text }));
 
-                // Audio Handling (Native/TTS)
-                if (useElevenLabs && response.text) {
-                    // ... ElevenLabs logic called via ttsService ...
-                    // NOTE: Reusing the same logic block would be better, but for quick insertion:
-                    try {
-                        const audioBuffer = await ttsService.textToSpeech(response.text);
-                        ws.send(JSON.stringify({ type: 'elevenlabs_audio', data: audioBuffer.toString('base64') }));
-                    } catch (e) {
-                        console.error('TTS Error:', e);
+                // TTS
+                if (response.text) {
+                    if (audioService.isReady()) {
+                        audioService.sendTextForTTS(response.text);
+                    } else if (useFallbackTTS) {
+                        try {
+                            const audioBuffer = await ttsService.textToSpeech(response.text);
+                            ws.send(JSON.stringify({
+                                type: 'elevenlabs_audio',
+                                data: audioBuffer.toString('base64')
+                            }));
+                        } catch (e) {
+                            console.error('TTS Error:', e);
+                        }
                     }
-                } else if (useNativeAudio && response.audioData) {
-                    console.log('Enviando audio nativo de Gemini (respuesta a texto)...');
-                    ws.send(JSON.stringify({
-                        type: 'audio',
-                        data: response.audioData
-                    }));
                 }
-
             } else if (message.type === 'whatsapp_send' && whatsappService) {
-                // Manejar solicitud de envío de WhatsApp desde el cliente
                 const { phoneNumber, text } = message;
 
                 if (!phoneNumber || !text) {
@@ -523,5 +796,10 @@ wss.on('connection', async (ws) => {
     ws.on('close', () => {
         console.log('Cliente desconectado');
         if (silenceTimer) clearTimeout(silenceTimer);
+
+        // Desconectar audio service
+        if (audioService.isReady()) {
+            audioService.disconnect();
+        }
     });
 });

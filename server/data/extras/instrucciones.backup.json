@@ -29,7 +29,7 @@
                 "response": "Showroom apagado."
             },
             {
-                "id": "lampara1_on",
+                "id": "lampara_1_on",
                 "triggers": [
                     "prende la lámpara 1",
                     "enciende la lámpara 1",
@@ -42,7 +42,7 @@
                 "response": "Lámpara 1 encendida."
             },
             {
-                "id": "lampara1_off",
+                "id": "lampara_1_off",
                 "triggers": [
                     "apaga la lámpara 1",
                     "desactiva la lámpara 1",
@@ -55,7 +55,7 @@
                 "response": "Lámpara 1 apagada."
             },
             {
-                "id": "lampara2_on",
+                "id": "lampara_2_on",
                 "triggers": [
                     "prende la lámpara 2",
                     "enciende la lámpara 2",
@@ -68,7 +68,7 @@
                 "response": "Lámpara 2 encendida."
             },
             {
-                "id": "lampara2_off",
+                "id": "lampara_2_off",
                 "triggers": [
                     "apaga la lámpara 2",
                     "desactiva la lámpara 2",
@@ -81,7 +81,7 @@
                 "response": "Lámpara 2 apagada."
             },
             {
-                "id": "lampara3_on",
+                "id": "lampara_3_on",
                 "triggers": [
                     "prende la lámpara 3",
                     "enciende la lámpara 3",
@@ -94,7 +94,7 @@
                 "response": "Lámpara 3 encendida."
             },
             {
-                "id": "lampara3_off",
+                "id": "lampara_3_off",
                 "triggers": [
                     "apaga la lámpara 3",
                     "desactiva la lámpara 3",
@@ -105,6 +105,67 @@
                     "url": "https://www.minverso.cl/controlremoto/proxy_lampara3.php?action=off"
                 },
                 "response": "Lámpara 3 apagada."
+            },
+            {
+                "id": "e_on",
+                "triggers": [
+                    "prende e",
+                    "enciende e"
+                ],
+                "tool": "visit_url",
+                "args": {
+                    "url": "http://192.168.1.X/action=on"
+                },
+                "response": "e encendido."
+            },
+            {
+                "id": "e_off",
+                "triggers": [
+                    "apaga e",
+                    "desactiva e"
+                ],
+                "tool": "visit_url",
+                "args": {
+                    "url": "http://192.168.1.X/action=off"
+                },
+                "response": "e apagado."
+            },
+            {
+                "id": "grupo_la_sala_del_show_on",
+                "triggers": [
+                    "prende la sala del show",
+                    "enciende la sala del show",
+                    "activa la sala del show"
+                ],
+                "tool": "visit_url",
+                "args": {
+                    "url": "",
+                    "urls": []
+                },
+                "response": "la sala del show encendido.",
+                "isGroup": true,
+                "groupDevices": [
+                    "e",
+                    "showroom"
+                ]
+            },
+            {
+                "id": "grupo_la_sala_del_show_off",
+                "triggers": [
+                    "apaga la sala del show",
+                    "desactiva la sala del show"
+                ],
+                "tool": "visit_url",
+                "args": {
+                    "url": "",
+                    "urls": []
+                },
+                "response": "la sala del show apagado.",
+                "isGroup": true,
+                "groupDevices": [
+                    "e",
+                    "showroom"
+                ]
             }
         ]
     },
@@ -140,14 +201,59 @@
     },
     "personal_disponible": "Usa esta lista para saber qué personas están disponibles en la empresa según el día de la semana (hoy):\n- Lunes: Ingrid Barra, Rodrigo Gonzalez, Gilli, Rocío montecinos, Pablo Moya\n- Martes: Ingrid Barra, Rodrigo Gonzalez, Pablo Moya\n- Miércoles: Ingrid Barra, Rodrigo Gonzalez, Gilli, Rocío montecinos\n- Jueves: Ingrid Barra, Rodrigo Gonzalez, Pablo Moya\n- Viernes: Ingrid Barra, Gilli, Rocío montecinos",
     "estilo_respuesta": "IMPORTANTE: Responde siempre de forma BREVE y CONCISA. Evita usar emojis, símbolos especiales o puntuación excesiva. Usa frases cortas y directas. No repitas información innecesaria. Máximo 2-3 oraciones por respuesta.",
-    "contactos": [
-        {
-            "nombre": "Diego",
-            "telefono": "+56912345678"
+    "_future_integrations": {
+        "_description": "Secciones preparadas para integraciones futuras. Activar cuando estén implementadas.",
+        "calendar_integration": {
+            "enabled": false,
+            "description": "Acceso al calendario del equipo para consultas de disponibilidad",
+            "triggers": [
+                "está disponible",
+                "tiene reunión",
+                "calendario de",
+                "agenda de"
+            ],
+            "instructions": "Cuando pregunten por disponibilidad, consulta el calendario del equipo usando la herramienta calendar_check."
         },
-        {
-            "nombre": "Ingrid",
-            "telefono": "+56987654321"
+        "media_display": {
+            "enabled": false,
+            "description": "Mostrar videos, imágenes y sitios web en pantalla",
+            "triggers": [
+                "muestra un video",
+                "muestra una imagen",
+                "abre el sitio",
+                "muestra la página"
+            ],
+            "instructions": "Para contenido multimedia, usa la herramienta display_media. Para sitios web, usa display_website."
+        },
+        "avatar_movements": {
+            "enabled": false,
+            "description": "Control de movimientos corporales del avatar",
+            "triggers": [
+                "saluda",
+                "despídete",
+                "asiente",
+                "niega"
+            ],
+            "instructions": "Para gestos del avatar, usa la herramienta avatar_gesture con el gesto correspondiente."
+        },
+        "person_recognition": {
+            "enabled": false,
+            "description": "Reconocimiento facial y diálogos personalizados",
+            "instructions": "Cuando se detecte una persona conocida por la cámara, personaliza el saludo usando su nombre y preferencias."
+        },
+        "iot_sensors": {
+            "enabled": false,
+            "description": "Control de sensores IoT (puertas, música, cámaras, ascensor, sensors home)",
+            "door_triggers": [
+                "abre la puerta",
+                "cierra la puerta"
+            ],
+            "music_triggers": [
+                "pon música",
+                "detén la música",
+                "sube el volumen"
+            ],
+            "instructions": "Para control domótico, usa las herramientas correspondientes: door_control, music_control, etc."
         }
-    ]
+    }
 }

@@ -1,4 +1,5 @@
 import { GeminiLLMService } from './GeminiLLMService.js';
+import { GeminiAudioService } from './GeminiAudioService.js';
 
 export class LLMFactory {
     /**
@@ -15,13 +16,18 @@ export class LLMFactory {
         switch (type.toLowerCase()) {
             case 'gemini':
                 return new GeminiLLMService(config);
-            // Future extensions:
-            // case 'gpt':
-            //     return new GPTService(config);
-            // case 'deepseek':
-            //     return new DeepSeekService(config);
             default:
                 throw new Error(`Unknown LLM type: ${type}`);
         }
+    }
+
+    /**
+     * Factory method to create a Gemini Audio Service instance.
+     * Uses gemini-2.5-flash-native-audio-dialog for STT/TTS
+     * @param {Object} config - Configuration object
+     * @returns {GeminiAudioService}
+     */
+    static createAudioService(config) {
+        return new GeminiAudioService(config);
     }
 }

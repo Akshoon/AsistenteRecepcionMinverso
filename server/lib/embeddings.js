@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const API_KEY = process.env.GOOGLE_API_KEY;
-const EMBED_URL = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${API_KEY}`;
+const EMBED_URL = `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${API_KEY}`;
 
 /**
  * Genera un embedding para un texto usando la API REST de Gemini

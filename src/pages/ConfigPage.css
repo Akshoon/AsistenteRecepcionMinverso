@@ -412,3 +412,470 @@
     width: 100%;
   }
 }
+
+/* ==================== */
+/* TABS NAVIGATION */
+/* ==================== */
+
+.config-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem 2rem;
+  background: var(--nav-bg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-x: auto;
+}
+
+.tab-button {
+  padding: 0.75rem 1.25rem;
+  background: transparent;
+  border: none;
+  border-radius: 8px 8px 0 0;
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.tab-button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--heading);
+}
+
+.tab-button.active {
+  background: var(--accent);
+  color: var(--heading);
+}
+
+/* ==================== */
+/* SERVICES GRID */
+/* ==================== */
+
+.services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.service-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--container-bg);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.service-card.ready {
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.service-card.pending {
+  border-color: rgba(255, 193, 7, 0.3);
+}
+
+.service-icon {
+  font-size: 1.5rem;
+}
+
+.service-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.service-name {
+  font-weight: 600;
+  color: var(--heading);
+  font-size: 0.9rem;
+}
+
+.service-status {
+  font-size: 0.75rem;
+  color: var(--text);
+}
+
+/* ==================== */
+/* IOT GRID */
+/* ==================== */
+
+.iot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.iot-card {
+  background: var(--container-bg);
+  border-radius: 8px;
+  padding: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.iot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.iot-name {
+  font-weight: 600;
+  color: var(--heading);
+  text-transform: capitalize;
+}
+
+.iot-status {
+  font-size: 1.2rem;
+}
+
+.iot-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.iot-btn {
+  flex: 1;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.iot-btn.on {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ADE80;
+}
+
+.iot-btn.on:hover {
+  background: rgba(34, 197, 94, 0.4);
+}
+
+.iot-btn.off {
+  background: rgba(239, 68, 68, 0.2);
+  color: #F87171;
+}
+
+.iot-btn.off:hover {
+  background: rgba(239, 68, 68, 0.4);
+}
+
+/* ==================== */
+/* INTEGRATIONS GRID */
+/* ==================== */
+
+.integrations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.integration-card {
+  background: var(--container-bg);
+  border-radius: 8px;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.integration-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.integration-icon {
+  font-size: 1.5rem;
+}
+
+.integration-name {
+  flex: 1;
+  font-weight: 600;
+  color: var(--heading);
+  font-size: 0.9rem;
+}
+
+.integration-desc {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+/* ==================== */
+/* TOGGLE SWITCH */
+/* ==================== */
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.1);
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--text);
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+input:checked+.slider {
+  background-color: var(--accent);
+}
+
+input:checked+.slider:before {
+  transform: translateX(20px);
+  background-color: var(--heading);
+}
+
+/* ==================== */
+/* RESPONSIVE TABS */
+/* ==================== */
+
+@media (max-width: 768px) {
+  .config-tabs {
+    padding: 0.5rem 1rem;
+    gap: 0.125rem;
+  }
+
+  .tab-button {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+  }
+
+  .services-grid,
+  .iot-grid,
+  .integrations-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==================== */
+/* IOT DEVICE CARDS */
+/* ==================== */
+
+.iot-devices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.iot-device-card {
+  background: var(--container-bg);
+  border-radius: 8px;
+  padding: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.iot-device-card:hover {
+  border-color: var(--accent);
+}
+
+.device-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.device-name {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--heading);
+  text-transform: capitalize;
+}
+
+.device-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.device-config {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.config-row label {
+  min-width: 100px;
+  font-size: 0.8rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.config-row .url-input {
+  flex: 1;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text);
+  background: var(--container-bg);
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.device-name-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  color: var(--heading);
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  transition: all 0.2s ease;
+  max-width: 200px;
+}
+
+.device-name-input:hover,
+.device-name-input:focus {
+  background: var(--body-bg);
+  border-color: rgba(255, 255, 255, 0.1);
+  outline: none;
+}
+
+/* Groups */
+.groups-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.group-card {
+  background: var(--container-bg);
+  border-radius: 8px;
+  padding: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 1rem;
+}
+
+.group-card:hover {
+  border-color: var(--accent);
+}
+
+.group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.group-name-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  color: var(--heading);
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.group-name-input:hover,
+.group-name-input:focus {
+  background: var(--body-bg);
+  border-color: rgba(255, 255, 255, 0.1);
+  outline: none;
+}
+
+.group-devices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.group-device-tag {
+  background: rgba(63, 110, 233, 0.2);
+  color: var(--text-accent);
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.group-device-tag button {
+  background: none;
+  border: none;
+  color: var(--text-accent);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0;
+}
+
+.add-device-to-group {
+  padding: 0.3rem 0.6rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.add-device-to-group:hover {
+  border-color: var(--accent);
+  color: var(--text-accent);
+}
+
+.add-device-select {
+  padding: 0.3rem 0.6rem;
+  background: var(--body-bg);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.8rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.add-device-select:hover,
+.add-device-select:focus {
+  border-color: var(--accent);
+}
+
+.add-device-select option {
+  background: var(--container-bg);
+  color: var(--text);
+}
