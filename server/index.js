@@ -563,8 +563,10 @@ if (fs.existsSync(SSL_PFX_PATH)) {
             passphrase: SSL_PASSPHRASE
         };
         server = https.createServer(httpsOptions, app);
-        console.log(`\n 🔒 Servidor HTTPS iniciado en puerto ${PORT}`);
-        console.log(` Certificado cargado desde: ${SSL_PFX_PATH}`);
+        server.listen(PORT, '0.0.0.0', () => {
+            console.log(`\n 🔒 Servidor HTTPS iniciado en puerto ${PORT}`);
+            console.log(` Certificado cargado desde: ${SSL_PFX_PATH}`);
+        });
     } catch (error) {
         console.error('❌ Error cargando certificado SSL:', error.message);
         process.exit(1); // Error crítico si se requiere HTTPS
