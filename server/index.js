@@ -17,6 +17,10 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Configuración de certificados SSL
+const SSL_PFX_PATH = process.env.SSL_PFX_PATH || (process.platform === 'win32' ? 'C:\\certificados\\minverso.pfx' : '/home/ubuntu/minverso.pfx');
+const SSL_PASSPHRASE = process.env.SSL_PASSPHRASE || 'minverso123';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const isWindows = process.platform === 'win32';
@@ -549,26 +553,31 @@ initializeServices({ whatsappService }).then(() => {
     console.error('⚠️ Error inicializando servicios:', err);
 });
 
-// --- Configurar Servidor (HTTPS en Windows, HTTP en Linux) ---
+// --- Configurar Servidor (HTTPS preferido para Micrófono) ---
 let server;
 
-if (isWindows) {
+if (fs.existsSync(SSL_PFX_PATH)) {
     try {
         const httpsOptions = {
-            pfx: fs.readFileSync('C:\\certificados\\minverso.pfx'),
-            passphrase: 'minverso123'
+            pfx: fs.readFileSync(SSL_PFX_PATH),
+            passphrase: SSL_PASSPHRASE
         };
         server = https.createServer(httpsOptions, app);
-        console.log(`\n 🔒 Servidor HTTPS iniciado en puerto ${PORT} (Modo Desarrollo)`);
+        console.log(`\n 🔒 Servidor HTTPS iniciado en puerto ${PORT}`);
+        console.log(` Certificado cargado desde: ${SSL_PFX_PATH}`);
     } catch (error) {
-        console.warn('⚠️ No se pudo cargar el certificado HTTPS, iniciando en HTTP:', error.message);
-        server = app.listen(PORT, '0.0.0.0');
+        console.error('❌ Error cargando certificado SSL:', error.message);
+        process.exit(1); // Error crítico si se requiere HTTPS
     }
 } else {
-    // En Linux (Producción), usamos HTTP y dejamos que Nginx maneje el SSL
-    server = app.listen(PORT, '0.0.0.0', () => {
-        console.log(`\n 🚀 Servidor HTTP iniciado en puerto ${PORT} (Modo Producción)`);
-    });
+    if (isWindows) {
+        console.error(`❌ Certificado no encontrado en ${SSL_PFX_PATH}`);
+        process.exit(1);
+    } else {
+        // En Linux, si no hay certificado, avisar pero intentar HTTP (o fallar si el usuario lo prefiere)
+        console.warn(`⚠️ Certificado no encontrado en ${SSL_PFX_PATH}. Iniciando en HTTP (¡El micrófono podría no funcionar!)`);
+        server = app.listen(PORT, '0.0.0.0');
+    }
 }
 
 const wss = new WebSocketServer({ server });
