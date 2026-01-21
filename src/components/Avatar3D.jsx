@@ -77,6 +77,10 @@ export default function Avatar3D({
             if (child.isMesh && child.material) {
                 // Convert to simpler material if it's high-end
                 if (child.material.type === 'MeshPhysicalMaterial') {
+                    // console.log('Keeping high quality material:', child.material.name);
+                    /* 
+                    // Restoration note: Kept original materials for better visuals as per user request. 
+                    // Keeping this commented out in case we need to revert for extreme performance issues.
                     const oldMat = child.material;
                     const newMat = new THREE.MeshStandardMaterial({
                         map: oldMat.map,
@@ -89,10 +93,11 @@ export default function Avatar3D({
                         metalness: oldMat.metalness !== undefined ? oldMat.metalness : 0.1,
                         transparent: oldMat.transparent,
                         opacity: oldMat.opacity,
-                        side: THREE.FrontSide // Optimization: Don't render back side
+                        side: THREE.FrontSide 
                     });
                     child.material = newMat;
-                    oldMat.dispose();
+                    oldMat.dispose(); 
+                    */
                 } else {
                     // Stripping costy features from existing materials
                     child.material.envMapIntensity = 0.5;

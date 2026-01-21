@@ -1013,16 +1013,12 @@ function HomePage() {
         <WebGLErrorBoundary>
           <Canvas
             shadows={false}
-            dpr={[1, 1]} // Force low resolution (crucial for VM stability)
+            dpr={[1, 1.5]}
             camera={{ position: [0, 1, 2.5], fov: 45 }}
             gl={{
-              powerPreference: "low-power",
-              antialias: false,
-              stencil: false,
-              depth: true,
-              alpha: false,
-              precision: "lowp", // Force low precision shaders
-              desynchronized: true
+              antialias: true,
+              preserveDrawingBuffer: true,
+              powerPreference: "default",
             }}
             onCreated={({ gl }) => {
               // Configure renderer for better stability
@@ -1033,17 +1029,9 @@ function HomePage() {
               console.error('❌ Canvas error:', error);
             }}
           >
-            <color attach="background" args={['#111111']} />
-            <ambientLight intensity={0.5} />
-            <directionalLight position={[5, 5, 5]} intensity={0.8} />
             <Suspense fallback={null}>
               <Avatar3D audioLevel={audioLevel} lipSyncData={lipSyncState} />
-              {/* Usa preset 'city' que es ligero si falla la imagen, o intenta cargar el background */}
-              <Environment
-                files="/background.jpg"
-                background
-                blur={0.5} // Blur ayuda con la calidad en baja resolución
-              />
+              <Environment files="/background.jpg" background />
             </Suspense>
             <OrbitControls
               enableZoom={false}
