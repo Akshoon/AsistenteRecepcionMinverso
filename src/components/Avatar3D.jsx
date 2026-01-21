@@ -73,18 +73,30 @@ export default function Avatar3D({
                 }
             }
 
-            // Simplify materials to prevent shader errors
+            // Simplify materials to prevent shader errors on non-GPU instances
             if (child.isMesh && child.material) {
-                const material = child.material;
-                if (material.type === 'MeshPhysicalMaterial') {
-                    material.clearcoat = 0;
-                    material.clearcoatRoughness = 0;
-                    material.sheen = 0;
-                    material.transmission = 0;
-                    material.thickness = 0;
-                    material.roughness = Math.min(material.roughness || 0.5, 1);
-                    material.metalness = Math.min(material.metalness || 0, 0.5);
-                    material.needsUpdate = true;
+                // Convert to simpler material if it's high-end
+                if (child.material.type === 'MeshPhysicalMaterial') {
+                    const oldMat = child.material;
+                    const newMat = new THREE.MeshStandardMaterial({
+                        map: oldMat.map,
+                        normalMap: oldMat.normalMap,
+                        roughnessMap: oldMat.roughnessMap,
+                        metalnessMap: oldMat.metalnessMap,
+                        aoMap: oldMat.aoMap,
+                        color: oldMat.color,
+                        roughness: 0.8,
+                        metalness: 0,
+                        transparent: oldMat.transparent,
+                        opacity: oldMat.opacity,
+                        skinning: true
+                    });
+                    child.material = newMat;
+                    oldMat.dispose();
+                } else {
+                    // Stripping costy features from existing materials
+                    child.material.envMapIntensity = 0.5;
+                    child.material.needsUpdate = true;
                 }
             }
         });
@@ -185,17 +197,18 @@ export default function Avatar3D({
                 meshName.includes('Face');
 
             if (isFaceMesh) {
+                // Optimized blink logic (only calculate once per mesh set)
                 const blinkCycle = t % 4;
                 let blink = 0;
                 if (blinkCycle > 3.7 && blinkCycle < 3.9) {
                     blink = Math.sin((blinkCycle - 3.7) / 0.2 * Math.PI);
+                } else if (Math.random() < 0.001) { // Reduced random blink frequency
+                    blink = 0.7;
                 }
-                // Random micro-blinks
-                if (Math.random() < 0.002) blink = 0.7;
 
                 if (dict["Eye_Blink_L"] !== undefined) {
-                    inf[dict["Eye_Blink_L"]] += (blink - inf[dict["Eye_Blink_L"]]) * 0.5;
-                    inf[dict["Eye_Blink_R"]] += (blink - inf[dict["Eye_Blink_R"]]) * 0.5;
+                    inf[dict["Eye_Blink_L"]] = THREE.MathUtils.lerp(inf[dict["Eye_Blink_L"]], blink, 0.5);
+                    inf[dict["Eye_Blink_R"]] = THREE.MathUtils.lerp(inf[dict["Eye_Blink_R"]], blink, 0.5);
                 }
             }
         }

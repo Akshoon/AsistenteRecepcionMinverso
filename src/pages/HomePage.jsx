@@ -1012,15 +1012,17 @@ function HomePage() {
       <div className="avatar-container">
         <WebGLErrorBoundary>
           <Canvas
+            shadows={false}
+            dpr={[1, 1]} // Force low resolution (crucial for VM stability)
             camera={{ position: [0, 1, 2.5], fov: 45 }}
             gl={{
               powerPreference: "low-power",
               antialias: false,
-              alpha: false,
-              preserveDrawingBuffer: false,
-              failIfMajorPerformanceCaveat: false,
               stencil: false,
-              depth: true
+              depth: true,
+              alpha: false,
+              precision: "lowp", // Force low precision shaders
+              desynchronized: true
             }}
             onCreated={({ gl }) => {
               // Configure renderer for better stability
@@ -1031,17 +1033,17 @@ function HomePage() {
               console.error('❌ Canvas error:', error);
             }}
           >
-            <ambientLight intensity={0.6} />
-            <directionalLight position={[5, 5, 5]} intensity={1} />
+            <color attach="background" args={['#0a0a1a']} />
+            <ambientLight intensity={0.8} />
+            <pointLight position={[2, 2, 2]} intensity={1} />
             <Suspense fallback={null}>
               <Avatar3D audioLevel={audioLevel} lipSyncData={lipSyncState} />
-              <Environment files="/background.jpg" background />
             </Suspense>
             <OrbitControls
               enableZoom={false}
               enablePan={false}
-              minPolarAngle={Math.PI / 3}
-              maxPolarAngle={Math.PI / 2}
+              minPolarAngle={Math.PI / 2.5}
+              maxPolarAngle={Math.PI / 1.8}
             />
           </Canvas>
         </WebGLErrorBoundary>

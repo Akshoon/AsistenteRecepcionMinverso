@@ -50,10 +50,10 @@ class WebGLErrorBoundary extends Component {
                         border: '1px solid rgba(255,255,255,0.2)'
                     }}>
                         <div style={{ fontSize: '64px', marginBottom: '20px' }}>⚠️</div>
-                        <h2 style={{ margin: '0 0 20px 0', fontSize: '24px' }}>WebGL Context Blocked</h2>
+                        <h2 style={{ margin: '0 0 20px 0', fontSize: '24px' }}>Optimización de Recursos</h2>
                         <p style={{ margin: '0 0 30px 0', lineHeight: '1.6', opacity: 0.9 }}>
-                            El navegador bloqueó el contexto WebGL debido a múltiples pérdidas de contexto.
-                            Esto puede ocurrir durante el desarrollo con hot-reload.
+                            El navegador agotó los recursos de video de la VM (Software Rendering).
+                            He simplificado los gráficos para evitar esto, pulsa recargar para aplicar los cambios.
                         </p>
                         <button
                             onClick={this.handleReload}
