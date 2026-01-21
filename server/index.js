@@ -18,7 +18,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+const isWindows = process.platform === 'win32';
 
 // Middleware para parsear JSON
 app.use(express.json());
@@ -548,19 +549,27 @@ initializeServices({ whatsappService }).then(() => {
     console.error('⚠️ Error inicializando servicios:', err);
 });
 
-// --- Configurar HTTPS ---
-const httpsOptions = {
-    pfx: fs.readFileSync('C:\\certificados\\minverso.pfx'),
-    passphrase: 'minverso123'
-};
+// --- Configurar Servidor (HTTPS en Windows, HTTP en Linux) ---
+let server;
 
-// --- Iniciar Servidor HTTPS ---
-const server = https.createServer(httpsOptions, app);
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n 🔒 Servidor HTTPS iniciado en puerto ${PORT}`);
-    console.log(` Accede desde: https://<TU_IP>:${PORT}`);
-    console.log(` Certificado: C:\\certificados\\minverso.pfx`);
-});
+if (isWindows) {
+    try {
+        const httpsOptions = {
+            pfx: fs.readFileSync('C:\\certificados\\minverso.pfx'),
+            passphrase: 'minverso123'
+        };
+        server = https.createServer(httpsOptions, app);
+        console.log(`\n 🔒 Servidor HTTPS iniciado en puerto ${PORT} (Modo Desarrollo)`);
+    } catch (error) {
+        console.warn('⚠️ No se pudo cargar el certificado HTTPS, iniciando en HTTP:', error.message);
+        server = app.listen(PORT, '0.0.0.0');
+    }
+} else {
+    // En Linux (Producción), usamos HTTP y dejamos que Nginx maneje el SSL
+    server = app.listen(PORT, '0.0.0.0', () => {
+        console.log(`\n 🚀 Servidor HTTP iniciado en puerto ${PORT} (Modo Producción)`);
+    });
+}
 
 const wss = new WebSocketServer({ server });
 console.log('WebSocket server listo');
