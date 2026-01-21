@@ -1033,11 +1033,17 @@ function HomePage() {
               console.error('❌ Canvas error:', error);
             }}
           >
-            <color attach="background" args={['#0a0a1a']} />
-            <ambientLight intensity={0.8} />
-            <pointLight position={[2, 2, 2]} intensity={1} />
+            <color attach="background" args={['#111111']} />
+            <ambientLight intensity={0.5} />
+            <directionalLight position={[5, 5, 5]} intensity={0.8} />
             <Suspense fallback={null}>
               <Avatar3D audioLevel={audioLevel} lipSyncData={lipSyncState} />
+              {/* Usa preset 'city' que es ligero si falla la imagen, o intenta cargar el background */}
+              <Environment
+                files="/background.jpg"
+                background
+                blur={0.5} // Blur ayuda con la calidad en baja resolución
+              />
             </Suspense>
             <OrbitControls
               enableZoom={false}

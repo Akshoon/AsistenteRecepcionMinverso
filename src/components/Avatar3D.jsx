@@ -85,11 +85,11 @@ export default function Avatar3D({
                         metalnessMap: oldMat.metalnessMap,
                         aoMap: oldMat.aoMap,
                         color: oldMat.color,
-                        roughness: 0.8,
-                        metalness: 0,
+                        roughness: oldMat.roughness !== undefined ? oldMat.roughness : 0.6,
+                        metalness: oldMat.metalness !== undefined ? oldMat.metalness : 0.1,
                         transparent: oldMat.transparent,
                         opacity: oldMat.opacity,
-                        skinning: true
+                        side: THREE.FrontSide // Optimization: Don't render back side
                     });
                     child.material = newMat;
                     oldMat.dispose();
