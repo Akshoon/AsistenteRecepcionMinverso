@@ -45,6 +45,7 @@ export class WhatsAppService {
 
             // Lanzar navegador con sesión persistente
             this.browser = await puppeteer.launch({
+                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
                 headless: this.headless,
                 userDataDir: this.sessionPath,
                 args: [
