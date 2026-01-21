@@ -1,334 +1,205 @@
 import { useRef, useEffect } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+import useGeminiLipSync from '../hooks/useGeminiLipSync';
 
-export default function Avatar3D({ audioLevel = 0, lipSyncData = null }) {
+/**
+ * Avatar3D Component - 3D Avatar with Spanish Real-Time Lip-Sync
+ * 
+ * Uses jaw BONE rotation for natural teeth movement via skinning.
+ * Morph targets coordinate with jaw rotation for refined lip shapes.
+ * 
+ * SPEC COMPLIANCE:
+ * - Jaw bone animated via rotation.x ∈ [0.0, 0.48] (STRICT LIMIT)
+ * - Jaw_Open morph NEVER exceeds 0.5
+ * - Teeth and tongue follow jaw via skinning (NOT animated directly)
+ * - Morphs refine shape only, jaw is primary driver
+ * - 20ms lookahead for reduced perceived latency
+ * 
+ * @param {Object} props
+ * @param {number} props.audioLevel - Legacy audio level (0-1)
+ * @param {Object} props.lipSyncData - Legacy lip-sync data
+ * @param {Object} props.audioFeatures - New audio features { rms, low, mid, high, zcr }
+ * @param {string} props.emotionState - Emotion: "neutral" | "happy" | "sad" | "angry" | "surprised"
+ */
+export default function Avatar3D({
+    audioLevel = 0,
+    lipSyncData = null,
+    audioFeatures = null,
+    emotionState = 'neutral'
+}) {
     const group = useRef();
     const { scene } = useGLTF('/avatar.glb');
 
     const morphMeshes = useRef([]);
     const bonesRef = useRef({});
+    const jawBoneRef = useRef(null);
     const timeRef = useRef(0);
-    const smoothedLevel = useRef(0);
-    const smoothedLipSync = useRef({
-        mouthOpen: 0,
-        mouthWide: 0,
-        jawOpen: 0,
-        lipsPursed: 0,
-        tongueOut: 0
-    });
 
+    const { gl } = useThree();
+
+    // Initialize the Gemini lip-sync hook
+    const { update: updateLipSync, reset: resetLipSync, JAW_ROTATION_MAX } = useGeminiLipSync();
+
+    // Initialize morphs, bones, and find jaw bone
     useEffect(() => {
         morphMeshes.current = [];
         bonesRef.current = {};
+        jawBoneRef.current = null;
+
+        // Jaw bone name patterns to search for
+        const JAW_BONE_NAMES = ['CC_Base_JawRoot', 'CC_Base_Jaw', 'JawRoot', 'Jaw', 'jaw'];
 
         scene.traverse((child) => {
-            // Recopilar morph targets
             if (child.isMesh && child.morphTargetDictionary && child.morphTargetInfluences) {
                 morphMeshes.current.push(child);
-                console.log('🎭 MorphTargets FOUND:', child.name, 'Influences:', child.morphTargetInfluences.length);
-                if (child.name.includes("Body")) {
-                    console.log('Detected Body Mesh:', child.name);
+
+                // Log morph targets for debugging
+                if (child.name === 'CC_Base_Body001' || child.name.includes('Head')) {
+                    console.log(`📋 Morph targets in ${child.name}:`, Object.keys(child.morphTargetDictionary).slice(0, 20));
                 }
             }
 
-            // Recopilar huesos del esqueleto
             if (child.isBone) {
                 bonesRef.current[child.name] = child;
-                console.log('🦴 Found Bone:', child.name); // Log all bones
+
+                // Find jaw bone
+                if (JAW_BONE_NAMES.some(pattern => child.name.includes(pattern) || child.name === pattern)) {
+                    if (!jawBoneRef.current) {
+                        jawBoneRef.current = child;
+                        console.log(`🦴 Jaw bone found: ${child.name}`);
+                    }
+                }
+            }
+
+            // Simplify materials to prevent shader errors
+            if (child.isMesh && child.material) {
+                const material = child.material;
+                if (material.type === 'MeshPhysicalMaterial') {
+                    material.clearcoat = 0;
+                    material.clearcoatRoughness = 0;
+                    material.sheen = 0;
+                    material.transmission = 0;
+                    material.thickness = 0;
+                    material.roughness = Math.min(material.roughness || 0.5, 1);
+                    material.metalness = Math.min(material.metalness || 0, 0.5);
+                    material.needsUpdate = true;
+                }
             }
         });
 
-        // Exponer para debug desde consola
-        window._morphMeshes = morphMeshes.current;
-
-        // Función para probar índices de morph
-        window.testMorphIndex = (index, value = 1) => {
-            const key = String(index);
-            const modifiedMeshes = [];
-            for (const mesh of morphMeshes.current) {
-                if (mesh.morphTargetDictionary[key] !== undefined) {
-                    mesh.morphTargetInfluences[mesh.morphTargetDictionary[key]] = value;
-                    modifiedMeshes.push(mesh.name);
-                    console.log(`✅ Morph ${index} = ${value} en ${mesh.name}`);
-                }
-            }
-            if (modifiedMeshes.length === 0) console.log(`❌ Morph ${index} no encontrado`);
-            return modifiedMeshes.length > 0 ? `Editado: ${modifiedMeshes.join(', ')}` : 'No encontrado';
-        };
-
-        // Función para escanear y encontrar morphs de boca
-        window.scanMorphs = (start = 0, end = 50, delay = 500) => {
-            console.log(`🔍 Escaneando morphs ${start}-${end}. Observa la cara y anota cuando veas la boca moverse.`);
-            let current = start;
-            window._scanInterval = setInterval(() => {
-                if (current > end) {
-                    clearInterval(window._scanInterval);
-                    // Reset
-                    for (let i = start; i <= end; i++) window.testMorphIndex(i, 0);
-                    console.log('✅ Escaneo terminado');
-                    return;
-                }
-                if (current > start) window.testMorphIndex(current - 1, 0);
-                console.log(`📍 Índice ${current}`);
-                window.testMorphIndex(current, 0.8);
-                current++;
-            }, delay);
-        };
-
-        window.stopScan = () => {
-            if (window._scanInterval) clearInterval(window._scanInterval);
-            for (let i = 0; i < 200; i++) window.testMorphIndex(i, 0);
-            console.log('⏹️ Escaneo detenido');
-        };
-
-        console.log('🔧 Debug morphs: testMorphIndex(50, 0.8), scanMorphs(50, 100), stopScan()');
-
-        // Mapeo EXACTO de huesos basado en los logs del usuario
-        const exactTargets = [
-            'CC_Base_L_Upperarm',
-            'CC_Base_R_Upperarm',
-            'CC_Base_L_Forearm',
-            'CC_Base_R_Forearm'
-        ];
-
+        // Find arm bones for posture
+        const armBones = ['CC_Base_L_Upperarm', 'CC_Base_R_Upperarm', 'CC_Base_L_Forearm', 'CC_Base_R_Forearm'];
         const foundBones = {};
-
-        exactTargets.forEach(name => {
+        armBones.forEach(name => {
             if (bonesRef.current[name]) {
                 foundBones[name] = bonesRef.current[name];
-                console.log(`✅ EXACT MATCH: ${name}`);
             }
         });
-
-        // Guardar para useFrame
         bonesRef.current.found = foundBones;
-        console.log('🦴 Bones stored for frame update:', Object.keys(foundBones));
+
+        // Log all bones if jaw not found
+        if (!jawBoneRef.current) {
+            console.warn('⚠️ Jaw bone not found! Available bones:', Object.keys(bonesRef.current).filter(n => n.toLowerCase().includes('jaw') || n.toLowerCase().includes('head')));
+        }
+
+        console.log('✅ Avatar initialized with jaw bone animation support');
 
     }, [scene]);
 
+    // Handle WebGL context loss
+    useEffect(() => {
+        const canvas = gl.domElement;
+
+        const handleContextLost = (event) => {
+            event.preventDefault();
+            console.warn('⚠️ WebGL context lost - will attempt automatic restore');
+        };
+
+        const handleContextRestored = () => {
+            console.log('✅ WebGL context restored');
+        };
+
+        canvas.addEventListener('webglcontextlost', handleContextLost);
+        canvas.addEventListener('webglcontextrestored', handleContextRestored);
+
+        return () => {
+            canvas.removeEventListener('webglcontextlost', handleContextLost);
+            canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+        };
+    }, [gl, scene]);
+
+    // Main animation loop
     useFrame((state, delta) => {
         timeRef.current += delta;
         const t = timeRef.current;
 
-        // === 0. MANTENER POSTURA (FORCE POSE) ===
+        // === ARM POSTURE ===
         const found = bonesRef.current.found || {};
-
         const lArm = found['CC_Base_L_Upperarm'];
         const rArm = found['CC_Base_R_Upperarm'];
         const lFore = found['CC_Base_L_Forearm'];
         const rFore = found['CC_Base_R_Forearm'];
 
-        if (lArm) {
-            lArm.rotation.z = -1.4; // Brazos abajo
-            lArm.rotation.x = 0;
-            lArm.rotation.y = 0;
-        }
-        if (rArm) {
-            rArm.rotation.z = 1.4;
-            rArm.rotation.x = 0;
-            rArm.rotation.y = 0;
-        }
-        if (lFore) {
-            lFore.rotation.z = 0.1; // Relajado
-            lFore.rotation.x = 0.2;
-        }
-        if (rFore) {
-            rFore.rotation.z = -0.1;
-            rFore.rotation.x = 0.2;
+        if (lArm) { lArm.rotation.z = -1.4; lArm.rotation.x = 0; lArm.rotation.y = 0; }
+        if (rArm) { rArm.rotation.z = 1.4; rArm.rotation.x = 0; rArm.rotation.y = 0; }
+        if (lFore) { lFore.rotation.z = 0.1; lFore.rotation.x = 0.2; }
+        if (rFore) { rFore.rotation.z = -0.1; rFore.rotation.x = 0.2; }
+
+        // === GEMINI LIP-SYNC (NEW HOOK) ===
+        // Convert legacy lipSyncData/audioLevel to audioFeatures if needed
+        let features = audioFeatures;
+
+        if (!features && (lipSyncData || audioLevel > 0.02)) {
+            // Fallback: create features from legacy data
+            const rms = lipSyncData?.jaw || audioLevel || 0;
+            features = {
+                rms,
+                low: rms * 0.4,
+                mid: rms * 0.4,
+                high: rms * 0.2,
+                zcr: lipSyncData?.isActive ? 0.15 : 0.05,
+            };
         }
 
-        // === SUAVIZADO DE AUDIO ===
-        smoothedLevel.current += (audioLevel - smoothedLevel.current) * 0.2;
-        const level = smoothedLevel.current;
-
-        // Suavizar lip sync data
-        if (lipSyncData) {
-            const s = 0.25;
-            smoothedLipSync.current.mouthOpen += (lipSyncData.mouthOpen - smoothedLipSync.current.mouthOpen) * s;
-            smoothedLipSync.current.mouthWide += (lipSyncData.mouthWide - smoothedLipSync.current.mouthWide) * s;
-            smoothedLipSync.current.jawOpen += (lipSyncData.jawOpen - smoothedLipSync.current.jawOpen) * s;
-            smoothedLipSync.current.lipsPursed += (lipSyncData.lipsPursed - smoothedLipSync.current.lipsPursed) * s;
+        // Update lip-sync via hook (handles jaw bone + all morphs + emotions)
+        if (features || lipSyncData || audioLevel > 0.02) {
+            updateLipSync(
+                jawBoneRef.current,
+                morphMeshes.current,
+                features,
+                emotionState
+            );
         }
-        const ls = smoothedLipSync.current;
 
-        // === APLICAR A CADA MESH ===
+        // === BLINKING (independent of lip-sync) ===
         for (const mesh of morphMeshes.current) {
             const dict = mesh.morphTargetDictionary;
             const inf = mesh.morphTargetInfluences;
             if (!dict || !inf) continue;
 
-            // FILTRAR: Aplicar a Body001 (cara), Tongue (lengua), y Teeth (dientes)
             const meshName = mesh.name;
-            const isFaceMesh = meshName === 'CC_Base_Body001';
-            const isTongueMesh = meshName.includes('Tongue');
-            const isTeethMesh = meshName.includes('Teeth') || meshName.includes('Angled');
+            const isFaceMesh = meshName === 'CC_Base_Body001' ||
+                meshName.includes('Head') ||
+                meshName.includes('Face');
 
-            // Helper: aplicar morph suavemente
-            const set = (name, val, smooth = 0.3) => {
-                if (dict[name] !== undefined) {
-                    inf[dict[name]] += (Math.max(0, Math.min(1, val)) - inf[dict[name]]) * smooth;
-                }
-            };
-
-            // =====================================================
-            // 1. PARPADEO NATURAL (Índices 11, 12)
-            // =====================================================
-            const blinkCycle = t % 4; // Ciclo de 4 segundos
-            let blink = 0;
-            if (blinkCycle > 3.7 && blinkCycle < 3.9) {
-                blink = Math.sin((blinkCycle - 3.7) / 0.2 * Math.PI);
-            }
-            // Micro-parpadeos aleatorios
-            if (Math.random() < 0.003) blink = 0.6;
-
-            set("Eye_Blink_L", blink, 0.5);
-            set("Eye_Blink_R", blink, 0.5);
-
-            // =====================================================
-            // 2. BOCA / LIP SYNC (Índices 0, 1, 2, 46, 47, 72)
-            // CON SUAVIZADO para movimientos naturales
-            // =====================================================
-            const GAIN = 1.8; // Aumentado para más movimiento de boca
-            // Usar valores suavizados para movimientos fluidos
-            const mouthOpen = (lipSyncData ? ls.mouthOpen : level) * GAIN;
-            const mouthWide = (lipSyncData ? ls.mouthWide : 0) * GAIN;
-            const lipsPursed = (lipSyncData ? ls.lipsPursed : 0) * GAIN;
-
-            // DEBUG: Ver si este mesh tiene morphs de labios
-            if (dict["Ah"] !== undefined && mouthOpen > 0.1 && Math.random() < 0.01) {
-                console.log(`🔴 ${mesh.name} (isFace=${isFaceMesh}): Ah=${mouthOpen.toFixed(2)}`);
-            }
-
-            // APLICAR MOVIMIENTO DE BOCA a mesh facial
             if (isFaceMesh) {
-                // --- APERTURA PRINCIPAL (más pronunciado) ---
-                set("Ah", Math.min(mouthOpen * 0.8, 0.8), 0.4);
-                set("Mouth_Drop_Lower", Math.min(mouthOpen * 0.5, 0.6), 0.3);
+                const blinkCycle = t % 4;
+                let blink = 0;
+                if (blinkCycle > 3.7 && blinkCycle < 3.9) {
+                    blink = Math.sin((blinkCycle - 3.7) / 0.2 * Math.PI);
+                }
+                // Random micro-blinks
+                if (Math.random() < 0.002) blink = 0.7;
 
-                // --- FORMAS REDONDAS (O, U) ---
-                set("Oh", Math.min(lipsPursed * 0.7, 0.7), 0.4);
-                set("W_OO", Math.min(lipsPursed * 0.6, 0.7), 0.4);
-                set("Mouth_Pucker_Up_L", Math.min(lipsPursed * 0.4, 0.5), 0.3);
-                set("Mouth_Pucker_Up_R", Math.min(lipsPursed * 0.4, 0.5), 0.3);
-
-                // --- FORMAS ANCHAS (E, I) ---
-                set("Mouth_Smile_L", Math.min(mouthWide * 0.4, 0.45), 0.4);
-                set("Mouth_Smile_R", Math.min(mouthWide * 0.4, 0.45), 0.4);
-
-                // --- CIERRE (M, B, P) ---
-                const isSilent = level < 0.08;
-                set("Mouth_Close", isSilent ? 0.1 : 0, 0.3);
-            }
-
-            // APLICAR A LENGUA (movimiento orgánico)
-            if (isTongueMesh) {
-                // Lengua se mueve sutilmente al hablar
-                const tongueMove = level > 0.1 ? Math.sin(t * 6) * 0.15 : 0;
-                set("Tongue_Out", Math.max(0, tongueMove * mouthOpen), 0.25);
-                set("Tongue_Bulge_L", Math.max(0, tongueMove * 0.5), 0.2);
-                set("Tongue_Bulge_R", Math.max(0, -tongueMove * 0.5), 0.2);
-            }
-
-            // APLICAR A DIENTES (siguen apertura de boca)
-            if (isTeethMesh) {
-                // Los dientes también tienen Ah para seguir la mandíbula
-                set("Ah", Math.min(mouthOpen * 0.4, 0.4), 0.4);
-            }
-
-            // =====================================================
-            // 3. CEJAS EXPRESIVAS (Índices 3-10)
-            // =====================================================
-            // Levantar cejas internas al hablar (interés)
-            const browLift = level > 0.15 ? (level - 0.15) * 1.5 : 0;
-            set("Brow_Raise_Inner_L", Math.min(browLift + 0.1, 0.6), 0.15);
-            set("Brow_Raise_Inner_R", Math.min(browLift + 0.1, 0.6), 0.15);
-
-            // Levantar cejas externas en énfasis fuerte
-            if (level > 0.5) {
-                set("Brow_Raise_Outer_L", (level - 0.5) * 1.2, 0.2);
-                set("Brow_Raise_Outer_R", (level - 0.5) * 1.2, 0.2);
-            } else {
-                set("Brow_Raise_Outer_L", 0, 0.15);
-                set("Brow_Raise_Outer_R", 0, 0.15);
-            }
-
-            // Micro-movimientos de cejas idle
-            const browIdle = Math.sin(t * 0.7) * 0.05;
-            set("Brow_Compress_L", browIdle > 0 ? browIdle : 0, 0.1);
-            set("Brow_Compress_R", browIdle > 0 ? browIdle : 0, 0.1);
-
-            // =====================================================
-            // 4. MOVIMIENTO DE OJOS (Índices 17-24)
-            // =====================================================
-            // Saccades: miradas rápidas ocasionales
-            const saccadeX = Math.sin(t * 0.3) > 0.95 ? Math.sin(t * 8) * 0.15 : 0;
-            const saccadeY = Math.sin(t * 0.25) > 0.97 ? 0.1 : 0;
-
-            if (saccadeX > 0) {
-                set("Eye_L_Look_R", saccadeX, 0.15);
-                set("Eye_R_Look_R", saccadeX, 0.15);
-                set("Eye_L_Look_L", 0, 0.15);
-                set("Eye_R_Look_L", 0, 0.15);
-            } else if (saccadeX < 0) {
-                set("Eye_L_Look_L", -saccadeX, 0.15);
-                set("Eye_R_Look_L", -saccadeX, 0.15);
-                set("Eye_L_Look_R", 0, 0.15);
-                set("Eye_R_Look_R", 0, 0.15);
-            } else {
-                set("Eye_L_Look_L", 0, 0.1);
-                set("Eye_R_Look_L", 0, 0.1);
-                set("Eye_L_Look_R", 0, 0.1);
-                set("Eye_R_Look_R", 0, 0.1);
-            }
-
-            set("Eye_L_Look_Up", saccadeY, 0.1);
-            set("Eye_R_Look_Up", saccadeY, 0.1);
-
-            // =====================================================
-            // 5. MEJILLAS Y NARIZ (Índices 27-45)
-            // =====================================================
-            // Sonrisa genuina (Duchenne): Eye_Squint + Cheek_Raise - MUY REDUCIDO
-            const isSmiling = mouthWide > 0.5 || level > 0.6; // Umbral más alto
-            const smileFactor = isSmiling ? 0.2 : 0; // Intensidad reducida
-
-            set("Cheek_Raise_L", smileFactor, 0.2);
-            set("Cheek_Raise_R", smileFactor, 0.2);
-            set("Eye_Squint_L", smileFactor * 0.4, 0.2);
-            set("Eye_Squint_R", smileFactor * 0.4, 0.2);
-
-            // Respiración nasal sutil
-            const noseBreath = Math.sin(t * 1.5) * 0.15 + 0.1;
-            set("Nose_Nostril_Dilate_L", noseBreath, 0.1);
-            set("Nose_Nostril_Dilate_R", noseBreath, 0.1);
-
-            // =====================================================
-            // 6. MICRO-EXPRESIONES ALEATORIAS (Humanidad)
-            // =====================================================
-            // Pequeños gestos ocasionales
-            const microTime = Math.sin(t * 0.4);
-
-            if (microTime > 0.92) {
-                // Leve tensión de labios
-                set("Mouth_Tighten_L", 0.15, 0.1);
-                set("Mouth_Tighten_R", 0.15, 0.1);
-            } else {
-                set("Mouth_Tighten_L", 0, 0.1);
-                set("Mouth_Tighten_R", 0, 0.1);
-            }
-
-            if (microTime < -0.9) {
-                // Leve fruncimiento de nariz
-                set("Nose_Sneer_L", 0.1, 0.1);
-                set("Nose_Sneer_R", 0.1, 0.1);
-            } else {
-                set("Nose_Sneer_L", 0, 0.1);
-                set("Nose_Sneer_R", 0, 0.1);
+                if (dict["Eye_Blink_L"] !== undefined) {
+                    inf[dict["Eye_Blink_L"]] += (blink - inf[dict["Eye_Blink_L"]]) * 0.5;
+                    inf[dict["Eye_Blink_R"]] += (blink - inf[dict["Eye_Blink_R"]]) * 0.5;
+                }
             }
         }
-    }
-    );
+    });
 
     return (
         <group ref={group} position={[0, -5, 0]} scale={3}>

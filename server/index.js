@@ -1,4 +1,5 @@
 import express from 'express';
+import https from 'https';
 import { WebSocketServer } from 'ws';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
@@ -32,78 +33,84 @@ app.use((req, res, next) => {
 // Servir archivos estáticos del frontend
 app.use(express.static(join(__dirname, '../dist')));
 
-// --- Cargar Contexto y Configuración ---
-const documentsPath = join(__dirname, 'data/documentos');
-let contextDocs = '';
+// --- Funciones para Cargar ConfiguraciÃ³n DinÃ¡mica ---
 
-try {
-    if (fs.existsSync(documentsPath)) {
-        const files = fs.readdirSync(documentsPath);
-        console.log(`Cargando ${files.length} documentos para contexto...`);
-
-        for (const file of files) {
-            if (file.endsWith('.txt')) {
-                const content = fs.readFileSync(join(documentsPath, file), 'utf-8');
-                contextDocs += `\n--- CONTENIDO DE ${file} ---\n${content}\n`;
-                console.log(`  ${file} cargado`);
+function loadContextDocs() {
+    const documentsPath = join(__dirname, 'data/documentos');
+    let contextDocs = '';
+    try {
+        if (fs.existsSync(documentsPath)) {
+            const files = fs.readdirSync(documentsPath);
+            // Limit log noise
+            // console.log(`Cargando ${files.length} documentos para contexto...`);
+            for (const file of files) {
+                if (file.endsWith('.txt')) {
+                    const content = fs.readFileSync(join(documentsPath, file), 'utf-8');
+                    contextDocs += `\n--- CONTENIDO DE ${file} ---\n${content}\n`;
+                }
             }
         }
-    } else {
-        console.warn(`Directorio de documentos no encontrado: ${documentsPath}`);
+    } catch (error) {
+        console.warn('No se pudieron cargar documentos:', error.message);
     }
-} catch (error) {
-    console.warn('No se pudieron cargar documentos:', error.message);
+    return contextDocs;
 }
 
-let instructions = {};
-try {
-    const instructionsPath = join(__dirname, 'data/extras/instrucciones.json');
-    if (fs.existsSync(instructionsPath)) {
-        instructions = JSON.parse(fs.readFileSync(instructionsPath, 'utf-8'));
-        console.log('Instrucciones JSON cargadas desde extras/instrucciones.json');
-    }
-} catch (error) {
-    console.warn('Error cargando instrucciones.json:', error.message);
-}
-
-let phoneNumbers = {};
-try {
-    const phonesPath = join(__dirname, 'data/extras/phone_number.json');
-    if (fs.existsSync(phonesPath)) {
-        phoneNumbers = JSON.parse(fs.readFileSync(phonesPath, 'utf-8'));
-        console.log('Teléfonos cargados desde extras/phone_number.json');
-    }
-} catch (error) {
-    console.warn('Error cargando phone_number.json:', error.message);
-}
-
-const formattedInstructions = Object.entries(instructions)
-    .map(([key, value]) => {
-        if (typeof value === 'object' && value.description) {
-            let formatted = `- ${key}: ${value.description}`;
-            if (value.instructions) {
-                formatted += `\n  Instrucciones: ${value.instructions}`;
-            }
-            // Si tiene comandos anidados, listar los triggers y sus detalles
-            if (value.commands && Array.isArray(value.commands)) {
-                value.commands.forEach(cmd => {
-                    formatted += `\n  - Comando: "${cmd.id}"`;
-                    formatted += `\n    Frases: ${cmd.triggers.join(', ')}`;
-                    formatted += `\n    Respuesta sugerida: "${cmd.response}"`;
-                    formatted += `\n    Acción: Tool "${cmd.tool}" con args ${JSON.stringify(cmd.args)}`;
-                });
-            }
-            return formatted;
+function getFormattedInstructions() {
+    let instructions = {};
+    try {
+        const instructionsPath = join(__dirname, 'data/extras/instrucciones.json');
+        if (fs.existsSync(instructionsPath)) {
+            instructions = JSON.parse(fs.readFileSync(instructionsPath, 'utf-8'));
         }
-        return `- ${key}: ${value}`;
-    })
-    .join('\n');
+    } catch (error) {
+        console.warn('Error cargando instrucciones.json:', error.message);
+    }
 
-const formattedContacts = Object.entries(phoneNumbers)
-    .map(([name, number]) => `- ${name}: ${number}`)
-    .join('\n');
+    return Object.entries(instructions)
+        .map(([key, value]) => {
+            if (typeof value === 'object' && value.description) {
+                let formatted = `- ${key}: ${value.description}`;
+                if (value.instructions) {
+                    formatted += `\n  Instrucciones: ${value.instructions}`;
+                }
+                if (value.commands && Array.isArray(value.commands)) {
+                    value.commands.forEach(cmd => {
+                        formatted += `\n  - Comando: "${cmd.id}"`;
+                        formatted += `\n    Frases: ${cmd.triggers.join(', ')}`;
+                        formatted += `\n    Respuesta sugerida: "${cmd.response}"`;
+                        formatted += `\n    Acción: Tool "${cmd.tool}" con args ${JSON.stringify(cmd.args)}`;
+                    });
+                }
+                return formatted;
+            }
+            return `- ${key}: ${value}`;
+        })
+        .join('\n');
+}
 
-const SYSTEM_INSTRUCTION = `
+function getFormattedContacts() {
+    let phoneNumbers = {};
+    try {
+        const phonesPath = join(__dirname, 'data/extras/phone_number.json');
+        if (fs.existsSync(phonesPath)) {
+            phoneNumbers = JSON.parse(fs.readFileSync(phonesPath, 'utf-8'));
+        }
+    } catch (error) {
+        console.warn('Error cargando phone_number.json:', error.message);
+    }
+
+    return Object.entries(phoneNumbers)
+        .map(([name, number]) => `- ${name}: ${number}`)
+        .join('\n');
+}
+
+function generateSystemInstruction() {
+    const contextDocs = loadContextDocs();
+    const formattedInstructions = getFormattedInstructions();
+    const formattedContacts = getFormattedContacts();
+
+    return `
 Eres el asistente virtual de Minverso. Tu objetivo es ayudar a los usuarios con información sobre la empresa y sus servicios.
 
 FECHA Y HORA ACTUAL: ${new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' })}
@@ -127,6 +134,7 @@ ${formattedContacts}
 
 Si te piden realizar una acción específica (como notificar o controlar dispositivos), CONFIRMA que lo harás.
 `;
+}
 
 // --- Inicializar Servicios ---
 
@@ -414,6 +422,117 @@ app.post('/api/config/integrations', (req, res) => {
     }
 });
 
+// --- Documents API ---
+
+// Get all documents
+app.get('/api/config/documents', (req, res) => {
+    try {
+        const documentsPath = join(__dirname, 'data/documentos');
+        if (!fs.existsSync(documentsPath)) {
+            return res.json([]);
+        }
+
+        const files = fs.readdirSync(documentsPath)
+            .filter(file => file.endsWith('.txt'))
+            .map(file => ({
+                name: file,
+                size: fs.statSync(join(documentsPath, file)).size,
+                modified: fs.statSync(join(documentsPath, file)).mtime
+            }));
+
+        res.json(files);
+    } catch (error) {
+        console.error('Error reading documents:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get specific document
+app.get('/api/config/documents/:filename', (req, res) => {
+    try {
+        const documentsPath = join(__dirname, 'data/documentos');
+        const filePath = join(documentsPath, req.params.filename);
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'Document not found' });
+        }
+
+        const content = fs.readFileSync(filePath, 'utf-8');
+        res.json({ filename: req.params.filename, content });
+    } catch (error) {
+        console.error('Error reading document:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Save document
+app.post('/api/config/documents', (req, res) => {
+    try {
+        const { filename, content } = req.body;
+
+        if (!filename || content === undefined) {
+            return res.status(400).json({ error: 'Filename and content are required' });
+        }
+
+        const documentsPath = join(__dirname, 'data/documentos');
+        if (!fs.existsSync(documentsPath)) {
+            fs.mkdirSync(documentsPath, { recursive: true });
+        }
+
+        const filePath = join(documentsPath, filename);
+        fs.writeFileSync(filePath, content, 'utf-8');
+
+        res.json({ success: true, message: 'Document saved' });
+    } catch (error) {
+        console.error('Error saving document:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Delete document
+app.delete('/api/config/documents/:filename', (req, res) => {
+    try {
+        const documentsPath = join(__dirname, 'data/documentos');
+        const filePath = join(documentsPath, req.params.filename);
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'Document not found' });
+        }
+
+        fs.unlinkSync(filePath);
+        res.json({ success: true, message: 'Document deleted' });
+    } catch (error) {
+        console.error('Error deleting document:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- Devices API ---
+
+// Get available serial ports
+app.get('/api/devices/serial-ports', async (req, res) => {
+    try {
+        // Placeholder: En producción, usar SerialPort.list() de 'serialport'
+        // Por ahora retornamos un array vacío
+        res.json([]);
+    } catch (error) {
+        console.error('Error listing serial ports:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get available cameras
+app.get('/api/devices/cameras', async (req, res) => {
+    try {
+        // Placeholder: En producción, enumerar dispositivos de video
+        // Por ahora retornamos un array vacío
+        res.json([]);
+    } catch (error) {
+        console.error('Error listing cameras:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // --- Services Status API ---
 
 // Estado de todos los servicios
@@ -429,18 +548,29 @@ initializeServices({ whatsappService }).then(() => {
     console.error('⚠️ Error inicializando servicios:', err);
 });
 
-// --- Iniciar Servidor ---
-const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n Servidor iniciado en puerto ${PORT}`);
-    console.log(` Accede desde: http://<TU_IP>:${PORT}`);
+// --- Configurar HTTPS ---
+const httpsOptions = {
+    pfx: fs.readFileSync('C:\\certificados\\minverso.pfx'),
+    passphrase: 'minverso123'
+};
+
+// --- Iniciar Servidor HTTPS ---
+const server = https.createServer(httpsOptions, app);
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n 🔒 Servidor HTTPS iniciado en puerto ${PORT}`);
+    console.log(` Accede desde: https://<TU_IP>:${PORT}`);
+    console.log(` Certificado: C:\\certificados\\minverso.pfx`);
 });
 
 const wss = new WebSocketServer({ server });
 console.log('WebSocket server listo');
-console.log(`Documentos cargados en contexto: ${contextDocs.length} caracteres`);
+console.log(`Documentos cargados dinámicamente al conectar clientes.`);
 
 wss.on('connection', async (ws) => {
     console.log('Cliente conectado');
+
+    // Generar instrucción del sistema fresca para esta conexión
+    const currentSystemInstruction = generateSystemInstruction();
 
     // Obtener servicios del registro
     const iotService = getIoTService();
@@ -460,7 +590,7 @@ wss.on('connection', async (ws) => {
     // --- Inicializar LLM Service (texto + tools) ---
     const llmService = LLMFactory.createLLM('gemini', {
         apiKey: process.env.GOOGLE_API_KEY,
-        systemInstruction: SYSTEM_INSTRUCTION,
+        systemInstruction: currentSystemInstruction,
         toolHandler: toolHandler
     });
 
@@ -608,7 +738,7 @@ wss.on('connection', async (ws) => {
 
             // Intentar reconectar
             try {
-                await audioService.connect(SYSTEM_INSTRUCTION);
+                await audioService.connect(currentSystemInstruction);
                 ws.send(JSON.stringify({ type: 'status', status: 'connected', message: 'Servicio de voz reconectado' }));
                 console.log('✅ Audio Service reconectado exitosamente');
             } catch (e) {
@@ -620,7 +750,7 @@ wss.on('connection', async (ws) => {
 
     // --- Intentar conectar Audio Service (LIVE session) ---
     try {
-        await audioService.connect(SYSTEM_INSTRUCTION);
+        await audioService.connect(currentSystemInstruction);
         console.log('Audio Service LIVE conectado con system instruction');
     } catch (error) {
         console.warn('Audio Service no disponible:', error.message);

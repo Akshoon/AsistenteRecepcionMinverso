@@ -107,64 +107,40 @@
                 "response": "Lámpara 3 apagada."
             },
             {
-                "id": "e_on",
-                "triggers": [
-                    "prende e",
-                    "enciende e"
-                ],
-                "tool": "visit_url",
-                "args": {
-                    "url": "http://192.168.1.X/action=on"
-                },
-                "response": "e encendido."
-            },
-            {
-                "id": "e_off",
-                "triggers": [
-                    "apaga e",
-                    "desactiva e"
-                ],
-                "tool": "visit_url",
-                "args": {
-                    "url": "http://192.168.1.X/action=off"
-                },
-                "response": "e apagado."
-            },
-            {
                 "id": "grupo_la_sala_del_show_on",
                 "triggers": [
-                    "prende la sala del show",
-                    "enciende la sala del show",
-                    "activa la sala del show"
+                    "prende La sala del show",
+                    "enciende La sala del show",
+                    "activa La sala del show"
                 ],
                 "tool": "visit_url",
                 "args": {
                     "url": "",
                     "urls": []
                 },
-                "response": "la sala del show encendido.",
+                "response": "La sala del show encendido.",
                 "isGroup": true,
                 "groupDevices": [
-                    "e",
-                    "showroom"
+                    "showroom",
+                    "lampara_2"
                 ]
             },
             {
                 "id": "grupo_la_sala_del_show_off",
                 "triggers": [
-                    "apaga la sala del show",
-                    "desactiva la sala del show"
+                    "apaga La sala del show",
+                    "desactiva La sala del show"
                 ],
                 "tool": "visit_url",
                 "args": {
                     "url": "",
                     "urls": []
                 },
-                "response": "la sala del show apagado.",
+                "response": "La sala del show apagado.",
                 "isGroup": true,
                 "groupDevices": [
-                    "e",
-                    "showroom"
+                    "showroom",
+                    "lampara_2"
                 ]
             }
         ]
@@ -197,7 +173,7 @@
                 "message": "Hola Pedro, llego una encomienda para ti en recepcion"
             }
         ],
-        "instructions": "Para visitas: Genera el mensaje EXACTAMENTE con el formato: 'Hola [NombreContacto], esta [NombreVisitante] en recepcion'. Extrae el [NombreVisitante] de lo que dice el usuario.\nPara paquetes/encargos: Genera el mensaje con formato: 'Hola [NombreContacto], llego [TipoDeObjeto: un paquete/una carta/etc] para ti en recepcion'.\nIMPORTANTE: Después de llamar a la herramienta, LEE LA RESPUESTA y comunícala al usuario (éxito o error)."
+        "instructions": "Para visitas: Genera el mensaje EXACTAMENTE con el formato: 'Hola [NombreContacto], esta [NombreVisitante] en recepcion'. Extrae el [NombreVisitante] de lo que dice el usuario.\nPara paquetes/encargos: Genera el mensaje con formato: 'Hola [NombreContacto], llego [TipoDeObjeto: un paquete/una carta/etc] para ti en recepcion'.\nIMPORTANTE: Después de llamar a la herramienta, LEE LA RESPUESTA y comunícala al usuario (éxito o error).\nIMPORTANTE: Notifica SIEMPRE, incluso si la persona no está en la lista de disponibles o no se encuentra en la oficina."
     },
     "personal_disponible": "Usa esta lista para saber qué personas están disponibles en la empresa según el día de la semana (hoy):\n- Lunes: Ingrid Barra, Rodrigo Gonzalez, Gilli, Rocío montecinos, Pablo Moya\n- Martes: Ingrid Barra, Rodrigo Gonzalez, Pablo Moya\n- Miércoles: Ingrid Barra, Rodrigo Gonzalez, Gilli, Rocío montecinos\n- Jueves: Ingrid Barra, Rodrigo Gonzalez, Pablo Moya\n- Viernes: Ingrid Barra, Gilli, Rocío montecinos",
     "estilo_respuesta": "IMPORTANTE: Responde siempre de forma BREVE y CONCISA. Evita usar emojis, símbolos especiales o puntuación excesiva. Usa frases cortas y directas. No repitas información innecesaria. Máximo 2-3 oraciones por respuesta.",

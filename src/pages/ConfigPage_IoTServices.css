@@ -1,0 +1,118 @@
+/* IoT Services List */
+.iot-services-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.iot-service-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.iot-service-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 2px 8px rgba(79, 124, 255, 0.1);
+}
+
+.iot-service-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.iot-service-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+}
+
+.iot-service-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--heading);
+}
+
+.iot-service-description {
+    font-size: 0.875rem;
+    color: var(--text);
+}
+
+.iot-service-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.expand-icon {
+    font-size: 0.875rem;
+    color: var(--text);
+    transition: transform 0.2s ease;
+}
+
+.iot-service-config {
+    padding: 0 1.5rem 1.5rem 1.5rem;
+    border-top: 1px solid var(--border);
+    background: var(--body-bg);
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    padding-top: 1.5rem;
+}
+
+.config-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.config-field label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--heading);
+}
+
+.config-field input,
+.config-field select {
+    padding: 0.75rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.config-field input:focus,
+.config-field select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.15);
+}
+
+.config-field input::placeholder {
+    color: var(--text);
+    opacity: 0.5;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .iot-service-config {
+        grid-template-columns: 1fr;
+    }
+
+    .iot-service-header {
+        padding: 1rem;
+    }
+
+    .iot-service-config {
+        padding: 1rem;
+    }
+}

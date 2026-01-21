@@ -122,5 +122,12 @@
         "enable_auto_activation": false,
         "enable_visitor_logging": false,
         "enable_environment_awareness": false
+    },
+    "whatsapp": {
+        "enabled": false
+    },
+    "camera": {
+        "enabled": false,
+        "connection_type": "USB"
     }
 }

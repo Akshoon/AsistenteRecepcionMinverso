@@ -105,6 +105,43 @@
                     "url": "https://www.minverso.cl/controlremoto/proxy_lampara3.php?action=off"
                 },
                 "response": "Lámpara 3 apagada."
+            },
+            {
+                "id": "grupo_sala_de_estar_on",
+                "triggers": [
+                    "prende La sala del show",
+                    "enciende La sala del show",
+                    "activa La sala del show"
+                ],
+                "tool": "visit_url",
+                "args": {
+                    "url": "group:sala_de_estar_on",
+                    "urls": []
+                },
+                "response": "La sala del show encendido.",
+                "isGroup": true,
+                "groupDevices": [
+                    "showroom",
+                    "lampara_2"
+                ]
+            },
+            {
+                "id": "grupo_sala_de_estar_off",
+                "triggers": [
+                    "apaga La sala del show",
+                    "desactiva La sala del show"
+                ],
+                "tool": "visit_url",
+                "args": {
+                    "url": "group:sala_de_estar_off",
+                    "urls": []
+                },
+                "response": "La sala del show apagado.",
+                "isGroup": true,
+                "groupDevices": [
+                    "showroom",
+                    "lampara_2"
+                ]
             }
         ]
     },

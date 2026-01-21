@@ -5,6 +5,9 @@ import Avatar3D from '../components/Avatar3D';
 import useAudioAnalyzer from '../hooks/useAudioAnalyzer';
 import '../App.css';
 
+// Detectar móvil
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
 function VisualPage() {
     const [isConnected, setIsConnected] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
@@ -435,12 +438,26 @@ function VisualPage() {
         <div className="app">
             {/* Escena 3D */}
             <div className="avatar-container">
-                <Canvas camera={{ position: [0, 1, 2.5], fov: 45 }}>
+                <Canvas
+                    camera={{ position: [0, 1, 2.5], fov: 45 }}
+                    gl={{
+                        antialias: !isMobile, // Desactivar antialiasing en móvil
+                        powerPreference: isMobile ? 'low-power' : 'high-performance',
+                        pixelRatio: isMobile ? 1 : Math.min(window.devicePixelRatio, 2) // Menor resolución en móvil
+                    }}
+                    shadows={!isMobile} // Sin sombras en móvil
+                    dpr={isMobile ? [1, 1] : [1, 2]} // Pixel ratio fijo en móvil
+                >
                     <ambientLight intensity={0.6} />
-                    <directionalLight position={[5, 5, 5]} intensity={1} />
+                    <directionalLight position={[5, 5, 5]} intensity={1} castShadow={!isMobile} />
                     <Suspense fallback={null}>
                         <Avatar3D audioLevel={audioLevel} lipSyncData={lipSyncData} />
-                        <Environment preset="apartment" background resolution={4096} backgroundBlurriness={0.0} />
+                        <Environment
+                            preset="apartment"
+                            background
+                            resolution={isMobile ? 1024 : 2048}
+                            backgroundBlurriness={0.0}
+                        />
                     </Suspense>
                     <OrbitControls
                         enableZoom={false}

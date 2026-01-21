@@ -1,0 +1,133 @@
+/* Group Devices Selection */
+.group-devices-section {
+    margin-top: 1rem;
+}
+
+.group-devices-label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--heading);
+    margin-bottom: 0.75rem;
+}
+
+/* Selected Devices List */
+.selected-devices-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    min-height: 60px;
+}
+
+.selected-device-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.selected-device-item:hover {
+    border-color: var(--accent);
+    background: rgba(79, 124, 255, 0.05);
+}
+
+.selected-device-name {
+    font-size: 0.875rem;
+    color: var(--heading);
+    text-transform: capitalize;
+    font-weight: 500;
+}
+
+.remove-device-btn {
+    width: 24px;
+    height: 24px;
+    background: rgba(245, 101, 101, 0.15);
+    color: #FC8181;
+    border: none;
+    border-radius: 4px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.remove-device-btn:hover {
+    background: rgba(245, 101, 101, 0.3);
+}
+
+/* Add Device Dropdown */
+.add-device-dropdown {
+    margin-top: 0.5rem;
+}
+
+.device-select {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.device-select:hover {
+    border-color: var(--accent);
+    background: rgba(79, 124, 255, 0.05);
+}
+
+.device-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.15);
+}
+
+.device-select option {
+    background: var(--card-bg);
+    color: var(--text);
+    padding: 0.5rem;
+}
+
+.device-select option:disabled {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.empty-devices-message {
+    text-align: center;
+    padding: 1.5rem;
+    color: var(--text);
+    font-size: 0.875rem;
+    background: var(--body-bg);
+    border-radius: 6px;
+    border: 1px dashed var(--border);
+}
+
+.groups-section {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+}
+
+.groups-section h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--heading);
+    margin: 0;
+}
+
+/* Mobile responsive for groups */
+@media (max-width: 768px) {
+    .group-devices-list {
+        grid-template-columns: 1fr;
+    }
+}

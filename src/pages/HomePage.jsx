@@ -3,7 +3,9 @@ import { useState, useRef, useCallback, useEffect, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment } from '@react-three/drei';
 import Avatar3D from '../components/Avatar3D';
+import WebGLErrorBoundary from '../components/WebGLErrorBoundary';
 import useAudioAnalyzer from '../hooks/useAudioAnalyzer';
+import useGeminiSpanishLipSync from '../hooks/useGeminiSpanishLipSync';
 import '../App.css';
 
 function HomePage() {
@@ -31,6 +33,11 @@ function HomePage() {
   const scheduledEndTimeRef = useRef(0);
   const audioDataRef = useRef([]); // Guardar datos de audio para análisis continuo
   const testIntervalRef = useRef(null);
+
+  // AudioWorklet-based Spanish Lip-Sync
+  const lipSyncWorkletRef = useRef(null);
+  const lipSyncInitializedRef = useRef(false);
+  const { lipSyncState, setWorkletNode, reset: resetLipSync } = useGeminiSpanishLipSync();
 
   // === FUNCIONES DE PRUEBA PARA CONSOLA ===
   useEffect(() => {
@@ -248,17 +255,36 @@ function HomePage() {
     console.log('🔇 Reproducción interrumpida y cola limpiada');
   }, [setAudioLevel, setLipSyncData]);
 
-  // Reproducir audio con scheduling preciso
-  const playAudioChunk = useCallback((base64Data) => {
+  // Reproducir audio con scheduling preciso + AudioWorklet Lip-Sync
+  const playAudioChunk = useCallback(async (base64Data) => {
     if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
+        sampleRate: 24000,
+        latencyHint: 'interactive' // Low latency mode
+      });
       scheduledEndTimeRef.current = audioContextRef.current.currentTime;
 
-      // Inicializar analizador para el output (Gemini)
-      outputAnalyzerRef.current = audioContextRef.current.createAnalyser();
-      outputAnalyzerRef.current.fftSize = 1024; // Alta resolución para vocales
-      outputAnalyzerRef.current.smoothingTimeConstant = 0.5;
-      outputDataArrayRef.current = new Uint8Array(outputAnalyzerRef.current.frequencyBinCount);
+      // Initialize AudioWorklet for lip-sync (replaces AnalyserNode)
+      if (!lipSyncInitializedRef.current) {
+        try {
+          await audioContextRef.current.audioWorklet.addModule('/worklets/LipSyncProcessor.js');
+          lipSyncWorkletRef.current = new AudioWorkletNode(audioContextRef.current, 'lip-sync-processor', {
+            numberOfInputs: 1,
+            numberOfOutputs: 1,
+            outputChannelCount: [1]
+          });
+          lipSyncWorkletRef.current.connect(audioContextRef.current.destination);
+
+          // Connect to Spanish Lip-Sync hook
+          setWorkletNode(lipSyncWorkletRef.current);
+
+          lipSyncInitializedRef.current = true;
+          console.log('\u2705 AudioWorklet LipSyncProcessor initialized');
+        } catch (error) {
+          console.error('\u274C Error initializing AudioWorklet:', error);
+          // Fallback: connect directly to destination
+        }
+      }
     }
 
     const ctx = audioContextRef.current;
@@ -270,11 +296,8 @@ function HomePage() {
         bytes[i] = binaryString.charCodeAt(i);
       }
 
-      // Guardar para análisis continuo (backup de volumen)
+      // PCM Int16 a Float32
       const samples = new Int16Array(bytes.buffer);
-      audioDataRef.current.push({ samples, startTime: scheduledEndTimeRef.current });
-
-      // PCM a Float32
       const floatSamples = new Float32Array(samples.length);
       for (let i = 0; i < samples.length; i++) {
         floatSamples[i] = samples[i] / 32768.0;
@@ -286,13 +309,21 @@ function HomePage() {
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
 
-      // CONEXIÓN CLAVE: Source -> Analyzer -> Speakers
-      if (outputAnalyzerRef.current) {
-        source.connect(outputAnalyzerRef.current);
-        outputAnalyzerRef.current.connect(ctx.destination);
+      // Connect: Source -> AudioWorklet -> Speakers
+      if (lipSyncWorkletRef.current) {
+        source.connect(lipSyncWorkletRef.current);
+        // Worklet is already connected to destination
       } else {
         source.connect(ctx.destination);
       }
+
+      // Calculate RMS for audioLevel (simple approach for visualization)
+      let sumSquares = 0;
+      for (let i = 0; i < floatSamples.length; i++) {
+        sumSquares += floatSamples[i] * floatSamples[i];
+      }
+      const rms = Math.sqrt(sumSquares / floatSamples.length);
+      setAudioLevel(Math.min(1, rms * 5)); // Boost for visibility
 
       const startTime = Math.max(ctx.currentTime, scheduledEndTimeRef.current);
       source.start(startTime);
@@ -308,13 +339,14 @@ function HomePage() {
         }
         if (ctx.currentTime >= scheduledEndTimeRef.current - 0.05) {
           isPlayingRef.current = false;
+          setAudioLevel(0);
         }
       };
 
     } catch (error) {
       console.error('Error audio:', error);
     }
-  }, []);
+  }, [setAudioLevel]);
 
   // Analizar audio continuamente mientras reproduce (Volumen + LipSync)
   useEffect(() => {
@@ -372,7 +404,7 @@ function HomePage() {
       setAudioLevel(0);
       setLipSyncData(null);
 
-    }, 30); // 30ms (~33fps) para respuesta rápida
+    }, 20); // 20ms (~50fps) para baja latencia y respuesta rápida
 
     return () => clearInterval(interval);
   }, [setAudioLevel, setLipSyncData, analyzeFrequencies]);
@@ -590,7 +622,10 @@ function HomePage() {
       };
 
       recognition.onerror = (event) => {
-        console.warn('⚠️ Error en Speech Recognition:', event.error);
+        // Suppress harmless "no-speech" warnings - they're expected when user isn't speaking
+        if (event.error !== 'no-speech') {
+          console.warn('⚠️ Error en Speech Recognition:', event.error);
+        }
       };
 
       try {
@@ -975,20 +1010,41 @@ function HomePage() {
 
       {/* Escena 3D */}
       <div className="avatar-container">
-        <Canvas camera={{ position: [0, 1, 2.5], fov: 45 }}>
-          <ambientLight intensity={0.6} />
-          <directionalLight position={[5, 5, 5]} intensity={1} />
-          <Suspense fallback={null}>
-            <Avatar3D audioLevel={audioLevel} lipSyncData={lipSyncData} />
-            <Environment preset="apartment" background resolution={4096} backgroundBlurriness={0.0} />
-          </Suspense>
-          <OrbitControls
-            enableZoom={false}
-            enablePan={false}
-            minPolarAngle={Math.PI / 3}
-            maxPolarAngle={Math.PI / 2}
-          />
-        </Canvas>
+        <WebGLErrorBoundary>
+          <Canvas
+            camera={{ position: [0, 1, 2.5], fov: 45 }}
+            gl={{
+              powerPreference: "low-power",
+              antialias: false,
+              alpha: false,
+              preserveDrawingBuffer: false,
+              failIfMajorPerformanceCaveat: false,
+              stencil: false,
+              depth: true
+            }}
+            onCreated={({ gl }) => {
+              // Configure renderer for better stability
+              gl.setClearColor('#000000', 1);
+              console.log('✅ WebGL Renderer created successfully');
+            }}
+            onError={(error) => {
+              console.error('❌ Canvas error:', error);
+            }}
+          >
+            <ambientLight intensity={0.6} />
+            <directionalLight position={[5, 5, 5]} intensity={1} />
+            <Suspense fallback={null}>
+              <Avatar3D audioLevel={audioLevel} lipSyncData={lipSyncState} />
+              <Environment files="/background.jpg" background />
+            </Suspense>
+            <OrbitControls
+              enableZoom={false}
+              enablePan={false}
+              minPolarAngle={Math.PI / 3}
+              maxPolarAngle={Math.PI / 2}
+            />
+          </Canvas>
+        </WebGLErrorBoundary>
       </div>
 
       {/* Controles mínimos en la parte inferior */}
