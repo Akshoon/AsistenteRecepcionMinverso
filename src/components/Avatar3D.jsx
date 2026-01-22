@@ -24,199 +24,68 @@ import useGeminiLipSync from '../hooks/useGeminiLipSync';
  * @param {string} props.emotionState - Emotion: "neutral" | "happy" | "sad" | "angry" | "surprised"
  */
 export default function Avatar3D({
+    audioStream = null, // New Prop: MediaStream
+    emotionState = 'neutral',
+    // Legacy props kept for compatibility but unused by new hook
     audioLevel = 0,
     lipSyncData = null,
-    audioFeatures = null,
-    emotionState = 'neutral'
+    audioFeatures = null
 }) {
     const group = useRef();
     const { scene } = useGLTF('/avatar.glb');
-
-    const morphMeshes = useRef([]);
-    const bonesRef = useRef({});
-    const jawBoneRef = useRef(null);
-    const timeRef = useRef(0);
-
     const { gl } = useThree();
 
-    // Initialize the Gemini lip-sync hook
-    const { update: updateLipSync, reset: resetLipSync, JAW_ROTATION_MAX } = useGeminiLipSync();
+    // === NEW HOOK IMPLEMENTATION ===
+    // Handles all lip-sync, jaw physics, morphs, and blinking internally
+    useGeminiLipSync({
+        scene,
+        audioStream,
+        currentEmotion: emotionState
+    });
 
-    // Initialize morphs, bones, and find jaw bone
+    // === UTILITIES ===
     useEffect(() => {
-        morphMeshes.current = [];
-        bonesRef.current = {};
-        jawBoneRef.current = null;
-
-        // Jaw bone name patterns to search for
-        const JAW_BONE_NAMES = ['CC_Base_JawRoot', 'CC_Base_Jaw', 'JawRoot', 'Jaw', 'jaw'];
-
+        // Simplify materials for performance
         scene.traverse((child) => {
-            if (child.isMesh && child.morphTargetDictionary && child.morphTargetInfluences) {
-                morphMeshes.current.push(child);
-
-                // Log morph targets for debugging
-                if (child.name === 'CC_Base_Body001' || child.name.includes('Head')) {
-                    console.log(`📋 Morph targets in ${child.name}:`, Object.keys(child.morphTargetDictionary).slice(0, 20));
-                }
-            }
-
-            if (child.isBone) {
-                bonesRef.current[child.name] = child;
-
-                // Find jaw bone
-                if (JAW_BONE_NAMES.some(pattern => child.name.includes(pattern) || child.name === pattern)) {
-                    if (!jawBoneRef.current) {
-                        jawBoneRef.current = child;
-                        console.log(`🦴 Jaw bone found: ${child.name}`);
-                    }
-                }
-            }
-
-            // Simplify materials to prevent shader errors on non-GPU instances
             if (child.isMesh && child.material) {
-                // Convert to simpler material if it's high-end
-                if (child.material.type === 'MeshPhysicalMaterial') {
-                    // console.log('Keeping high quality material:', child.material.name);
-                    /* 
-                    // Restoration note: Kept original materials for better visuals as per user request. 
-                    // Keeping this commented out in case we need to revert for extreme performance issues.
-                    const oldMat = child.material;
-                    const newMat = new THREE.MeshStandardMaterial({
-                        map: oldMat.map,
-                        normalMap: oldMat.normalMap,
-                        roughnessMap: oldMat.roughnessMap,
-                        metalnessMap: oldMat.metalnessMap,
-                        aoMap: oldMat.aoMap,
-                        color: oldMat.color,
-                        roughness: oldMat.roughness !== undefined ? oldMat.roughness : 0.6,
-                        metalness: oldMat.metalness !== undefined ? oldMat.metalness : 0.1,
-                        transparent: oldMat.transparent,
-                        opacity: oldMat.opacity,
-                        side: THREE.FrontSide 
-                    });
-                    child.material = newMat;
-                    oldMat.dispose(); 
-                    */
-                } else {
-                    // Stripping costy features from existing materials
-                    child.material.envMapIntensity = 0.5;
-                    child.material.needsUpdate = true;
-                }
+                child.material.envMapIntensity = 0.5;
+                child.material.needsUpdate = true;
             }
         });
-
-        // Find arm bones for posture
-        const armBones = ['CC_Base_L_Upperarm', 'CC_Base_R_Upperarm', 'CC_Base_L_Forearm', 'CC_Base_R_Forearm'];
-        const foundBones = {};
-        armBones.forEach(name => {
-            if (bonesRef.current[name]) {
-                foundBones[name] = bonesRef.current[name];
-            }
-        });
-        bonesRef.current.found = foundBones;
-
-        // Log all bones if jaw not found
-        if (!jawBoneRef.current) {
-            console.warn('⚠️ Jaw bone not found! Available bones:', Object.keys(bonesRef.current).filter(n => n.toLowerCase().includes('jaw') || n.toLowerCase().includes('head')));
-        }
-
-        console.log('✅ Avatar initialized with jaw bone animation support');
-
     }, [scene]);
 
-    // Handle WebGL context loss
+    // Handle WebGL Context Loss
     useEffect(() => {
         const canvas = gl.domElement;
-
-        const handleContextLost = (event) => {
-            event.preventDefault();
-            console.warn('⚠️ WebGL context lost - will attempt automatic restore');
-        };
-
-        const handleContextRestored = () => {
-            console.log('✅ WebGL context restored');
-        };
+        const handleContextLost = (e) => { e.preventDefault(); console.warn('WebGL Context Lost'); };
+        const handleContextRestored = () => console.log('WebGL Context Restored');
 
         canvas.addEventListener('webglcontextlost', handleContextLost);
         canvas.addEventListener('webglcontextrestored', handleContextRestored);
-
         return () => {
             canvas.removeEventListener('webglcontextlost', handleContextLost);
             canvas.removeEventListener('webglcontextrestored', handleContextRestored);
         };
-    }, [gl, scene]);
+    }, [gl]);
 
-    // Main animation loop
-    useFrame((state, delta) => {
-        timeRef.current += delta;
-        const t = timeRef.current;
+    // === IDLE ANIMATION (ARMS/BODY ONLY) ===
+    // Lip-sync and Face are handled by the hook. Here we handle body posture.
+    useFrame((state) => {
+        const t = state.clock.getElapsedTime();
 
-        // === ARM POSTURE ===
-        const found = bonesRef.current.found || {};
-        const lArm = found['CC_Base_L_Upperarm'];
-        const rArm = found['CC_Base_R_Upperarm'];
-        const lFore = found['CC_Base_L_Forearm'];
-        const rFore = found['CC_Base_R_Forearm'];
+        // Arm Posture (Static/Idle)
+        // We find bones manually here since refs are inside the hook now, 
+        // or we could traverse once. For safety/speed we traverse if needed or cache.
+        // For strictly keeping it simple:
+        const lArm = scene.getObjectByName('CC_Base_L_Upperarm');
+        const rArm = scene.getObjectByName('CC_Base_R_Upperarm');
+        const lFore = scene.getObjectByName('CC_Base_L_Forearm');
+        const rFore = scene.getObjectByName('CC_Base_R_Forearm');
 
         if (lArm) { lArm.rotation.z = -1.4; lArm.rotation.x = 0; lArm.rotation.y = 0; }
         if (rArm) { rArm.rotation.z = 1.4; rArm.rotation.x = 0; rArm.rotation.y = 0; }
         if (lFore) { lFore.rotation.z = 0.1; lFore.rotation.x = 0.2; }
         if (rFore) { rFore.rotation.z = -0.1; rFore.rotation.x = 0.2; }
-
-        // === GEMINI LIP-SYNC (NEW HOOK) ===
-        // Convert legacy lipSyncData/audioLevel to audioFeatures if needed
-        let features = audioFeatures;
-
-        if (!features && (lipSyncData || audioLevel > 0.02)) {
-            // Fallback: create features from legacy data
-            const rms = lipSyncData?.jaw || audioLevel || 0;
-            features = {
-                rms,
-                low: rms * 0.4,
-                mid: rms * 0.4,
-                high: rms * 0.2,
-                zcr: lipSyncData?.isActive ? 0.15 : 0.05,
-            };
-        }
-
-        // Update lip-sync via hook (handles jaw bone + all morphs + emotions)
-        if (features || lipSyncData || audioLevel > 0.02) {
-            updateLipSync(
-                jawBoneRef.current,
-                morphMeshes.current,
-                features,
-                emotionState
-            );
-        }
-
-        // === BLINKING (independent of lip-sync) ===
-        for (const mesh of morphMeshes.current) {
-            const dict = mesh.morphTargetDictionary;
-            const inf = mesh.morphTargetInfluences;
-            if (!dict || !inf) continue;
-
-            const meshName = mesh.name;
-            const isFaceMesh = meshName === 'CC_Base_Body001' ||
-                meshName.includes('Head') ||
-                meshName.includes('Face');
-
-            if (isFaceMesh) {
-                // Optimized blink logic (only calculate once per mesh set)
-                const blinkCycle = t % 4;
-                let blink = 0;
-                if (blinkCycle > 3.7 && blinkCycle < 3.9) {
-                    blink = Math.sin((blinkCycle - 3.7) / 0.2 * Math.PI);
-                } else if (Math.random() < 0.001) { // Reduced random blink frequency
-                    blink = 0.7;
-                }
-
-                if (dict["Eye_Blink_L"] !== undefined) {
-                    inf[dict["Eye_Blink_L"]] = THREE.MathUtils.lerp(inf[dict["Eye_Blink_L"]], blink, 0.5);
-                    inf[dict["Eye_Blink_R"]] = THREE.MathUtils.lerp(inf[dict["Eye_Blink_R"]], blink, 0.5);
-                }
-            }
-        }
     });
 
     return (

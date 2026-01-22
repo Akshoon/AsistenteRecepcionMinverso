@@ -1,394 +1,331 @@
-import { useRef, useCallback, useMemo } from 'react';
+import { useEffect, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
 /**
- * useGeminiLipSync - Real-Time Lip-Sync Hook for Gemini Spanish Female Voice
+ * useGeminiLipSync (DEFINITIVE VERSION)
  * 
- * Optimized for Character Creator GLB avatars with Armature + SkinnedMesh.
- * Features:
- * - 20ms lookahead buffer for reduced perceived latency
- * - Jaw bone as primary driver (rotation.x ≤ 0.48)
- * - Jaw_Open morph strictly clamped to 0.5
- * - Spanish vocal mapping (NO AE, Er, R morphs)
- * - ZCR-based consonant detection
- * - Non-interfering emotion overlays
+ * Implementación Final de Ingeniería Gráfica 3D & Audio DSP.
  * 
- * @author Antigravity
- * @spec Gemini Spanish Female Voice Lip-Sync v1.0
- */
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-/** Maximum jaw bone rotation in radians (CRITICAL: Never exceed) */
-const JAW_ROTATION_MAX = 0.35;
-
-/** Maximum Jaw_Open morph value (CRITICAL: Never exceed) */
-const JAW_OPEN_MAX = 0.5;
-
-/** Lookahead buffer size in frames (~20ms at 60fps ≈ 1-2 frames) */
-const LOOKAHEAD_FRAMES = 2;
-
-/** Circular buffer capacity */
-const BUFFER_CAPACITY = 30;
-
-/** Lerp factors */
-const JAW_LERP = 0.22;
-const MORPH_LERP = 0.25;
-const EMOTION_LERP = 0.12;
-
-/** Maximum emotion intensity */
-const EMOTION_MAX_INTENSITY = 0.35;
-
-// ============================================================================
-// EMOTION PRESETS
-// ============================================================================
-
-const EMOTION_PRESETS = {
-    neutral: {},
-    happy: {
-        'Mouth_Smile_L': 0.25,
-        'Mouth_Smile_R': 0.25,
-        'Cheek_Raise_L': 0.15,
-        'Cheek_Raise_R': 0.15,
-        'Brow_Raise_Outer_L': 0.10,
-        'Brow_Raise_Outer_R': 0.10,
-    },
-    sad: {
-        'Mouth_Frown_L': 0.25,
-        'Mouth_Frown_R': 0.25,
-        'Brow_Drop_L': 0.20,
-        'Brow_Drop_R': 0.20,
-        'Eye_Squint_L': 0.10,
-        'Eye_Squint_R': 0.10,
-    },
-    angry: {
-        'Brow_Compress_L': 0.35,
-        'Brow_Compress_R': 0.35,
-        'Nose_Sneer_L': 0.15,
-        'Nose_Sneer_R': 0.15,
-        'Mouth_Tighten_L': 0.20,
-        'Mouth_Tighten_R': 0.20,
-    },
-    surprised: {
-        'Eye_Wide_L': 0.30,
-        'Eye_Wide_R': 0.30,
-        'Brow_Raise_Inner_L': 0.35,
-        'Brow_Raise_Inner_R': 0.35,
-    },
-};
-
-// Emotion morphs that should NOT be modified by lip-sync
-const EMOTION_MORPH_NAMES = new Set([
-    'Mouth_Smile_L', 'Mouth_Smile_R',
-    'Cheek_Raise_L', 'Cheek_Raise_R',
-    'Brow_Raise_Outer_L', 'Brow_Raise_Outer_R',
-    'Mouth_Frown_L', 'Mouth_Frown_R',
-    'Brow_Drop_L', 'Brow_Drop_R',
-    'Eye_Squint_L', 'Eye_Squint_R',
-    'Brow_Compress_L', 'Brow_Compress_R',
-    'Nose_Sneer_L', 'Nose_Sneer_R',
-    'Mouth_Tighten_L', 'Mouth_Tighten_R',
-    'Eye_Wide_L', 'Eye_Wide_R',
-    'Brow_Raise_Inner_L', 'Brow_Raise_Inner_R',
-]);
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Clamp value between min and max
- */
-function clamp(value, min, max) {
-    return Math.min(max, Math.max(min, value));
-}
-
-/**
- * Linear interpolation
- */
-function lerp(current, target, factor) {
-    return current + (target - current) * factor;
-}
-
-// ============================================================================
-// CIRCULAR BUFFER CLASS
-// ============================================================================
-
-class CircularBuffer {
-    constructor(capacity) {
-        this.capacity = capacity;
-        this.buffer = new Array(capacity).fill(null);
-        this.head = 0;
-        this.size = 0;
-    }
-
-    push(item) {
-        this.buffer[this.head] = item;
-        this.head = (this.head + 1) % this.capacity;
-        if (this.size < this.capacity) this.size++;
-    }
-
-    get(offsetFromNewest) {
-        if (offsetFromNewest >= this.size) return null;
-        const idx = (this.head - 1 - offsetFromNewest + this.capacity) % this.capacity;
-        return this.buffer[idx];
-    }
-
-    getLookahead(lookaheadFrames) {
-        // Get future frame (lookahead)
-        // Since we're looking ahead, we return the newest item if available
-        // In practice, the lookahead is achieved by buffering and delaying visual output
-        return this.get(0); // Return latest for now
-    }
-
-    clear() {
-        this.buffer.fill(null);
-        this.head = 0;
-        this.size = 0;
-    }
-}
-
-// ============================================================================
-// MAIN HOOK
-// ============================================================================
-
-/**
- * useGeminiLipSync Hook
+ * CARACTERÍSTICAS CRÍTICAS:
+ * 1. FIX MANDÍBULA: Solo Morph Target 'Jaw_Open'. Bone.rotation PROHIBIDO.
+ * 2. FIX ECO: Grafo de Audio Pasivo (Source -> Analyser). Sin salida a speakers.
+ * 3. MICRO-COMPORTAMIENTOS: Respiración, Parpadeo Inteligente, Emociones Suaves.
  * 
- * @param {Object} options
- * @param {THREE.Bone} options.jawBone - The jaw bone for rotation
- * @param {Object} options.morphTargets - Mesh morph target dictionary/influences
- * @param {Object} options.audioFeatures - Audio features { rms, low, mid, high, zcr }
- * @param {string} options.emotionState - Emotion: "neutral" | "happy" | "sad" | "angry" | "surprised"
- * @returns {Object} - { update, reset, getState }
+ * @param {Object} props
+ * @param {THREE.Group} props.scene - Avatar Scene Group
+ * @param {MediaStream} props.audioStream - Input Stream (Gemini PCM -> MediaStream)
+ * @param {string} props.currentEmotion - 'neutral', 'happy', 'sad', 'angry', 'surprised'
  */
-export default function useGeminiLipSync() {
-    // ========== REFS ==========
+export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 'neutral' }) {
 
-    // Circular buffer for lookahead
-    const bufferRef = useRef(new CircularBuffer(BUFFER_CAPACITY));
+    // === CONFIGURACIÓN ===
+    const CONFIG = {
+        SMOOTH_FACTOR: 0.8, // DSP Smoothing
+        JAW_MAX: 0.5,       // Max morph value
+        EMOTION_MAX: 0.2,   // Uncanny Valley Limit (Reduced for neutral)
+        BREATH_INTERVAL: 3000, // Min ms between breaths
+    };
 
-    // Previous values for lerp
-    const prevJawRef = useRef(0);
-    const prevMorphsRef = useRef({});
-    const prevEmotionMorphsRef = useRef({});
+    // === NOMBRES DE MORPHS ===
+    const MORPHS = {
+        JAW: 'Jaw_Open',
+        AH: 'Ah',
+        OH: 'Oh',
+        WOO: 'W_OO',
+        EE: 'EE',
+        IH: 'IH',
+        SZ: 'S_Z',
+        FV: 'F_V',
+        TLDN: 'T_L_D_N',
+        SMILE_L: 'Mouth_Smile_L', SMILE_R: 'Mouth_Smile_R',
+        FROWN_L: 'Mouth_Frown_L', FROWN_R: 'Mouth_Frown_R',
+        BLINK_L: 'Eye_Blink_L', BLINK_R: 'Eye_Blink_R',
+        // ... otros se usan dinámicamente según mapa de emociones
+    };
 
-    // Current state
-    const stateRef = useRef({
-        jaw: 0,
-        morphs: {},
-        emotionMorphs: {},
-        isActive: false,
+    // === REFERENCIAS DE ESTADO (MUTABLE, NO RENDER) ===
+    const state = useRef({
+        currentValues: {
+            Jaw_Open: 0,
+            Ah: 0, Oh: 0, W_OO: 0, EE: 0, IH: 0,
+            S_Z: 0, F_V: 0, T_L_D_N: 0
+        },
+        currentEmotions: {},
+        breathTimer: 0,
+        isBreathing: false,
+        blink: { value: 0, timer: 0, closing: false, duration: 0.12, nextBlinkTime: 3000 }
     });
 
-    // ========== COMPUTE LIPSYNC ==========
+    const audioRefs = useRef({
+        ctx: null,
+        analyser: null,
+        dataArray: null,
+        source: null
+    });
 
-    const computeLipSync = useCallback((features, emotionState = 'neutral') => {
-        if (!features) {
-            return {
-                jaw: 0,
-                morphs: { 'Jaw_Open': 0 },
-                emotionMorphs: {},
-                isActive: false,
-            };
-        }
+    const meshRefs = useRef({
+        morphMeshes: []
+    });
 
-        const { rms = 0, low = 0, mid = 0, high = 0, zcr = 0 } = features;
-        const epsilon = 0.0001;
+    // === UTILIDAD: CLEANUP / RESET ===
+    const resetFace = () => {
+        meshRefs.current.morphMeshes.forEach(mesh => {
+            if (!mesh.morphTargetInfluences) return;
+            mesh.morphTargetInfluences.fill(0);
+        });
+        state.current.currentValues = { Jaw_Open: 0, Ah: 0, Oh: 0, W_OO: 0, EE: 0, IH: 0, S_Z: 0, F_V: 0, T_L_D_N: 0 };
+        state.current.currentEmotions = {};
+    };
 
-        // ===== JAW BONE CALCULATION (PRIMARY DRIVER) =====
-        // jawTarget = pow(rms, 0.65) * 0.48
-        const jawTarget = clamp(Math.pow(rms, 0.65) * JAW_ROTATION_MAX, 0, JAW_ROTATION_MAX);
-        const jaw = lerp(prevJawRef.current, jawTarget, JAW_LERP);
-        prevJawRef.current = jaw;
-
-        // ===== JAW_OPEN MORPH (STRICT LIMIT) =====
-        // Jaw_Open = clamp(jaw * 0.9, 0.0, 0.5)
-        const jawOpen = clamp(jaw * 0.9, 0, JAW_OPEN_MAX);
-
-        // ===== VOCAL MORPH MAPPING (SPANISH) =====
-        const total = low + mid + high + epsilon;
-        const lowN = low / total;
-        const midN = mid / total;
-
-        const vocalMorphs = {
-            'Ah': lowN * rms * 0.9,
-            'EE': midN * rms * 0.95,
-            'IH': midN * rms * 0.6,
-            'Oh': lowN * rms * 0.45,
-            'W_OO': lowN * rms * 0.35,
-        };
-
-        // ===== CONSONANT MORPHS (ZCR-BASED) =====
-        const consonant = clamp(zcr * 3.2, 0, 1);
-
-        const consonantMorphs = {
-            'S_Z': consonant * 0.35,
-            'F_V': consonant * 0.30,
-            'T_L_D_N': consonant * 0.25,
-            'B_M_P': consonant * 0.30,
-            'Ch_J': consonant * 0.20,
-            'K_G_H_NG': consonant * 0.20,
-            'TH': consonant * 0.10,
-        };
-
-        // ===== TONGUE MORPHS (DISABLED - follows jaw via skinning) =====
-        const tongueMorphs = {};
-
-        // ===== COMBINE LIP-SYNC MORPHS =====
-        const lipSyncMorphs = {
-            'Jaw_Open': jawOpen,
-            ...vocalMorphs,
-            ...consonantMorphs,
-            ...tongueMorphs,
-        };
-
-        // Apply lerp to all morphs
-        const smoothedMorphs = {};
-        for (const [name, target] of Object.entries(lipSyncMorphs)) {
-            const prev = prevMorphsRef.current[name] || 0;
-            smoothedMorphs[name] = lerp(prev, target, MORPH_LERP);
-        }
-        prevMorphsRef.current = smoothedMorphs;
-
-        // ===== EMOTION MORPHS (NON-INTERFERING) =====
-        const emotionPreset = EMOTION_PRESETS[emotionState] || {};
-        const emotionMorphs = {};
-
-        for (const [name, targetValue] of Object.entries(emotionPreset)) {
-            const clampedTarget = clamp(targetValue, 0, EMOTION_MAX_INTENSITY);
-            const prev = prevEmotionMorphsRef.current[name] || 0;
-            emotionMorphs[name] = lerp(prev, clampedTarget, EMOTION_LERP);
-        }
-
-        // Decay unused emotion morphs
-        for (const name of EMOTION_MORPH_NAMES) {
-            if (!emotionPreset[name]) {
-                const prev = prevEmotionMorphsRef.current[name] || 0;
-                if (prev > 0.001) {
-                    emotionMorphs[name] = lerp(prev, 0, EMOTION_LERP);
-                }
+    // === 1. INICIALIZACIÓN: CACHE DE MESHES ===
+    useEffect(() => {
+        if (!scene) return;
+        const meshes = [];
+        scene.traverse((obj) => {
+            if (obj.isMesh && obj.morphTargetDictionary && obj.morphTargetInfluences) {
+                meshes.push(obj);
             }
-        }
-        prevEmotionMorphsRef.current = emotionMorphs;
+        });
+        meshRefs.current.morphMeshes = meshes;
 
-        return {
-            jaw,
-            morphs: smoothedMorphs,
-            emotionMorphs,
-            isActive: rms > 0.01,
+        // Reset inicial por si acaso
+        resetFace();
+
+        return () => resetFace();
+    }, [scene]);
+
+    // === 2. SETUP DE AUDIO (GRAFO PASIVO) ===
+    useEffect(() => {
+        if (!audioStream || !audioStream.active) {
+            resetFace();
+            return;
+        }
+
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContext(); // Nuevo contexto independiente para análisis
+        audioRefs.current.ctx = ctx;
+
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = CONFIG.SMOOTH_FACTOR;
+
+        const source = ctx.createMediaStreamSource(audioStream);
+
+        // CONEXIÓN PASIVA: Source -> Analyser
+        // 🚨 NUNCA CONECTAR A DESTINATION (Fix Eco)
+        source.connect(analyser);
+
+        audioRefs.current.analyser = analyser;
+        audioRefs.current.source = source;
+        audioRefs.current.dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        const handleInactive = () => resetFace();
+        audioStream.addEventListener('inactive', handleInactive);
+
+        return () => {
+            audioStream.removeEventListener('inactive', handleInactive);
+            source.disconnect();
+            analyser.disconnect();
+            if (ctx.state !== 'closed') ctx.close();
+            resetFace();
+            audioRefs.current.analyser = null;
         };
-    }, []);
+    }, [audioStream]);
 
-    // ========== UPDATE FUNCTION ==========
+    // === 3. BUCLE DE ANIMACIÓN (USEFRAME) ===
+    useFrame((_, delta) => {
+        // Safe check for delta
+        if (!delta || isNaN(delta)) delta = 0.016; // Fallback to ~60fps
 
-    /**
-     * Update lip-sync state with new audio features
-     * Should be called every frame from useFrame
-     * 
-     * @param {THREE.Bone} jawBone - The jaw bone to animate
-     * @param {SkinnedMesh[]} morphMeshes - Array of meshes with morph targets
-     * @param {Object} audioFeatures - { rms, low, mid, high, zcr }
-     * @param {string} emotionState - Current emotion state
-     */
-    const update = useCallback((jawBone, morphMeshes, audioFeatures, emotionState = 'neutral') => {
-        // Push features to buffer for lookahead
-        bufferRef.current.push(audioFeatures);
+        const { analyser, dataArray, ctx } = audioRefs.current;
+        const meshes = meshRefs.current.morphMeshes;
 
-        // Get lookahead features (use features from ~20ms ahead)
-        const lookaheadFeatures = bufferRef.current.size >= LOOKAHEAD_FRAMES
-            ? bufferRef.current.get(LOOKAHEAD_FRAMES - 1)
-            : audioFeatures;
+        if (!analyser || !dataArray || meshes.length === 0) return;
+        if (audioStream && !audioStream.active) { resetFace(); return; }
 
-        // Compute lip-sync state
-        const state = computeLipSync(lookaheadFeatures, emotionState);
-        stateRef.current = state;
+        // --- A. ANÁLISIS DSP ---
+        analyser.getByteFrequencyData(dataArray);
+        const binSize = ctx.sampleRate / analyser.fftSize;
 
-        // ===== APPLY JAW BONE ROTATION =====
-        // DISABLED: Jaw bone rotation causes asymmetric mouth movement
-        // The jaw bone pivot may not be centered in this avatar's rigging
-        // Using only Jaw_Open morph instead
-        if (jawBone && jawBone.isBone) {
-            // jawBone.rotation.x = state.jaw;  // DISABLED - causes asymmetry
-            jawBone.rotation.x = 0;  // Keep jaw bone at rest position
+        const getBandEnergy = (minHz, maxHz) => {
+            const start = Math.floor(minHz / binSize);
+            const end = Math.floor(maxHz / binSize);
+            let sum = 0;
+            if (end <= start) return 0;
+            for (let i = start; i < end; i++) sum += dataArray[i];
+            return (sum / (end - start)) / 255;
+        };
+
+        const low = getBandEnergy(100, 350);
+        const mid = getBandEnergy(350, 2000);
+        const high = getBandEnergy(2000, 5000);
+
+        // Cálculo RMS desde TimeDomain (Más preciso para lipsync que FFT sum)
+        // Pero usamos FFT sum por eficiencia ya que ya tenemos dataArray frequency
+        let totalEnergy = 0;
+        for (let i = 0; i < dataArray.length; i++) totalEnergy += dataArray[i];
+        const rms = (totalEnergy / dataArray.length) / 255 * 4.5; // Reduced boost from 9.0 to 4.5
+
+        // ZCR Proxy (Ratio High/Low)
+        const zcr = high; // Simplificado para eficiencia en frame loop
+
+        // --- B. LÓGICA FONÉTICA (ESPAÑOL FEMENINO) ---
+        const epsilon = 0.0001;
+        const total = low + mid + high + epsilon;
+
+        // 1. Mandíbula (Driver Maestro) - FIX MESH DETACHMENT
+        // Mayor sensibilidad (pow 0.6) pero controlada
+        const targetJaw = Math.pow(rms, 0.6) * CONFIG.JAW_MAX;
+        // Suavizado Lerp
+        const currentJaw = THREE.MathUtils.lerp(state.current.currentValues.Jaw_Open, targetJaw, 0.2);
+        state.current.currentValues.Jaw_Open = currentJaw;
+
+        // 2. Vocales (Multiplicadores ajustados a mitad de boost)
+        const targetAh = (low / total) * rms * 1.0;
+        const targetOh = (low / total) * rms * 0.6;
+        const targetWoo = (low / total) * rms * 0.5;
+        const targetEE = (mid / total) * rms * 0.9;
+        const targetIH = (mid / total) * rms * 0.6;
+
+        // 3. Consonantes (ZCR Driven) - Reduced sensititivy (2.5)
+        const c = Math.max(0, Math.min(1, zcr * 2.5));
+        const targetSZ = c * 0.25;
+        const targetFV = c * 0.2;
+        const targetTLDN = c * 0.2;
+
+        // --- C. MICRO-COMPORTAMIENTOS ---
+
+        // Respiración (Breathing)
+        state.current.breathTimer += delta * 1000;
+        let breathValue = 0;
+        if (rms < 0.04 && high > mid && state.current.breathTimer > CONFIG.BREATH_INTERVAL) {
+            // Trigger breath cycle
+            state.current.isBreathing = true;
+            // Reset timer logic handled differently usually, but simple cycle here:
+            const cycle = (Math.sin(Date.now() / 500) + 1) / 2; // 0-1 oscill
+            breathValue = cycle * 0.05;
+        } else {
+            state.current.isBreathing = false;
         }
 
-        // ===== APPLY MORPH TARGETS =====
-        if (morphMeshes && morphMeshes.length > 0) {
-            for (const mesh of morphMeshes) {
-                if (!mesh.morphTargetDictionary || !mesh.morphTargetInfluences) continue;
+        // Parpadeo Inteligente (Smart Blink)
+        state.current.blink.timer += delta * 1000;
+        if (state.current.blink.timer > state.current.blink.nextBlinkTime) {
+            state.current.blink.closing = true;
+            state.current.blink.timer = 0;
+            // Next random time (3s to 5s)
+            state.current.blink.nextBlinkTime = 3000 + Math.random() * 2000;
 
-                const dict = mesh.morphTargetDictionary;
-                const inf = mesh.morphTargetInfluences;
+            // Context ajustment
+            if (currentEmotion === 'surprised') state.current.blink.nextBlinkTime += 2000; // Stare
+        }
 
-                // Apply lip-sync morphs
-                for (const [name, value] of Object.entries(state.morphs)) {
-                    if (dict[name] !== undefined) {
-                        inf[dict[name]] = value;
-                    }
+        // Animación Blink
+        let blinkTarget = 0;
+        const blkSpeed = (currentEmotion === 'sad') ? 8 : 15; // Lento si triste
+
+        if (state.current.blink.closing) {
+            state.current.blink.value += delta * blkSpeed;
+            if (state.current.blink.value >= 1) {
+                state.current.blink.value = 1;
+                state.current.blink.closing = false;
+            }
+        } else {
+            state.current.blink.value -= delta * blkSpeed;
+            if (state.current.blink.value < 0) state.current.blink.value = 0;
+        }
+        const blinkVal = state.current.blink.value;
+
+        // --- D. APLICACIÓN A MESHES ---
+
+        // Mapa de valores finales
+        const TARGETS = {
+            [MORPHS.JAW]: currentJaw + breathValue, // Add breathing
+            [MORPHS.AH]: THREE.MathUtils.lerp(state.current.currentValues.Ah, targetAh, 0.1),
+            [MORPHS.OH]: THREE.MathUtils.lerp(state.current.currentValues.Oh, targetOh, 0.1),
+            [MORPHS.WOO]: THREE.MathUtils.lerp(state.current.currentValues.W_OO, targetWoo, 0.1),
+            [MORPHS.EE]: THREE.MathUtils.lerp(state.current.currentValues.EE, targetEE, 0.1),
+            [MORPHS.IH]: THREE.MathUtils.lerp(state.current.currentValues.IH, targetIH, 0.1),
+            [MORPHS.SZ]: THREE.MathUtils.lerp(state.current.currentValues.S_Z, targetSZ, 0.1), // Smoother consonants
+            [MORPHS.FV]: THREE.MathUtils.lerp(state.current.currentValues.F_V, targetFV, 0.1),
+            [MORPHS.TLDN]: THREE.MathUtils.lerp(state.current.currentValues.T_L_D_N, targetTLDN, 0.1),
+            [MORPHS.BLINK_L]: blinkVal,
+            [MORPHS.BLINK_R]: blinkVal
+        };
+
+        // Guardar estado
+        state.current.currentValues = {
+            Jaw_Open: TARGETS[MORPHS.JAW],
+            Ah: TARGETS[MORPHS.AH], Oh: TARGETS[MORPHS.OH], W_OO: TARGETS[MORPHS.WOO],
+            EE: TARGETS[MORPHS.EE], IH: TARGETS[MORPHS.IH],
+            S_Z: TARGETS[MORPHS.SZ], F_V: TARGETS[MORPHS.FV], T_L_D_N: TARGETS[MORPHS.TLDN]
+        };
+
+        // Emociones (Aditivas)
+        const EMOTION_MAP = {
+            neutral: {},
+            happy: { Mouth_Smile_L: 0.3, Mouth_Smile_R: 0.3, Cheek_Raise_L: 0.2, Cheek_Raise_R: 0.2 },
+            sad: { Mouth_Frown_L: 0.3, Mouth_Frown_R: 0.3, Brow_Drop_L: 0.2, Brow_Drop_R: 0.2 },
+            angry: { Brow_Compress_L: 0.4, Brow_Compress_R: 0.4, Mouth_Tighten_L: 0.2, Mouth_Tighten_R: 0.2 },
+            surprised: { Eye_Wide_L: 0.3, Eye_Wide_R: 0.3, Brow_Raise_Inner_L: 0.3, Brow_Raise_Inner_R: 0.3 }
+        };
+        const activeEmotion = EMOTION_MAP[currentEmotion] || {};
+
+        // Aplicar
+        meshes.forEach(mesh => {
+            if (!mesh.morphTargetDictionary || !mesh.morphTargetInfluences) return;
+
+            const setVal = (key, val) => {
+                const idx = mesh.morphTargetDictionary[key];
+                if (idx !== undefined) mesh.morphTargetInfluences[idx] = Math.min(val, 1);
+            };
+
+            const addVal = (key, val) => {
+                const idx = mesh.morphTargetDictionary[key];
+                if (idx !== undefined) {
+                    const curr = mesh.morphTargetInfluences[idx];
+                    mesh.morphTargetInfluences[idx] = Math.min(curr + val, 1);
                 }
+            };
 
-                // Apply emotion morphs (only on face meshes)
-                const isFaceMesh = mesh.name === 'CC_Base_Body001' ||
-                    mesh.name.includes('Head') ||
-                    mesh.name.includes('Face');
+            // 1. Lipsync Base
+            Object.entries(TARGETS).forEach(([k, v]) => setVal(k, v));
 
-                if (isFaceMesh) {
-                    for (const [name, value] of Object.entries(state.emotionMorphs)) {
-                        if (dict[name] !== undefined) {
-                            inf[dict[name]] = value;
+            // 2. Emociones (Suavizadas)
+            Object.entries(activeEmotion).forEach(([k, v]) => {
+                // Lerp emotion state
+                const current = state.current.currentEmotions[k] || 0;
+                const next = THREE.MathUtils.lerp(current, Math.min(v, CONFIG.EMOTION_MAX), 0.1);
+                state.current.currentEmotions[k] = next;
+
+                // FIX ACCUMULATION BUG:
+                // Si el morph ya fue seteado por TARGETS (ej. Jaw_Open), sumamos (addVal).
+                // Si es un morph puro de emoción (ej. Smile), lo sobrescribimos (setVal) para evitar acumulación infinita.
+                if (TARGETS[k] !== undefined) {
+                    addVal(k, next);
+                } else {
+                    setVal(k, next);
+                }
+            });
+
+            // Fade out unused emotions
+            Object.keys(state.current.currentEmotions).forEach(k => {
+                if (activeEmotion[k] === undefined) {
+                    const current = state.current.currentEmotions[k];
+                    const next = THREE.MathUtils.lerp(current, 0, 0.1);
+                    state.current.currentEmotions[k] = next;
+
+                    if (next > 0.001) {
+                        if (TARGETS[k] !== undefined) {
+                            addVal(k, next);
+                        } else {
+                            setVal(k, next);
                         }
                     }
+                    else delete state.current.currentEmotions[k];
                 }
-            }
-        }
-
-        return state;
-    }, [computeLipSync]);
-
-    // ========== RESET FUNCTION ==========
-
-    const reset = useCallback(() => {
-        bufferRef.current.clear();
-        prevJawRef.current = 0;
-        prevMorphsRef.current = {};
-        prevEmotionMorphsRef.current = {};
-        stateRef.current = {
-            jaw: 0,
-            morphs: {},
-            emotionMorphs: {},
-            isActive: false,
-        };
-    }, []);
-
-    // ========== GET STATE FUNCTION ==========
-
-    const getState = useCallback(() => {
-        return { ...stateRef.current };
-    }, []);
-
-    // ========== RETURN API ==========
-
-    return {
-        update,
-        reset,
-        getState,
-        // Constants for external use
-        JAW_ROTATION_MAX,
-        JAW_OPEN_MAX,
-        EMOTION_PRESETS,
-    };
+            });
+        });
+    });
 }
-
-// ============================================================================
-// EXPORTS
-// ============================================================================
-
-export {
-    JAW_ROTATION_MAX,
-    JAW_OPEN_MAX,
-    EMOTION_PRESETS,
-    EMOTION_MORPH_NAMES,
-};

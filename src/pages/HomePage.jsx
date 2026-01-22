@@ -255,39 +255,29 @@ function HomePage() {
     console.log('🔇 Reproducción interrumpida y cola limpiada');
   }, [setAudioLevel, setLipSyncData]);
 
-  // Reproducir audio con scheduling preciso + AudioWorklet Lip-Sync
-  const playAudioChunk = useCallback(async (base64Data) => {
+  // Stream especial para el Hook del Avatar (Gemini Lip Sync)
+  const geminiAudioDestRef = useRef(null);
+  const [geminiStream, setGeminiStream] = useState(null);
+
+  // Initializer for Audio Context & Destination
+  const initAudioContext = () => {
     if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: 24000,
-        latencyHint: 'interactive' // Low latency mode
-      });
-      scheduledEndTimeRef.current = audioContextRef.current.currentTime;
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioContext({ sampleRate: 24000 });
+      audioContextRef.current = ctx;
 
-      // Initialize AudioWorklet for lip-sync (replaces AnalyserNode)
-      if (!lipSyncInitializedRef.current) {
-        try {
-          await audioContextRef.current.audioWorklet.addModule('/worklets/LipSyncProcessor.js');
-          lipSyncWorkletRef.current = new AudioWorkletNode(audioContextRef.current, 'lip-sync-processor', {
-            numberOfInputs: 1,
-            numberOfOutputs: 1,
-            outputChannelCount: [1]
-          });
-          lipSyncWorkletRef.current.connect(audioContextRef.current.destination);
+      // Create MediaStreamDestination for the Avatar Hook
+      const dest = ctx.createMediaStreamDestination();
+      geminiAudioDestRef.current = dest;
+      setGeminiStream(dest.stream); // Pass this to Avatar3D
 
-          // Connect to Spanish Lip-Sync hook
-          setWorkletNode(lipSyncWorkletRef.current);
-
-          lipSyncInitializedRef.current = true;
-          console.log('\u2705 AudioWorklet LipSyncProcessor initialized');
-        } catch (error) {
-          console.error('\u274C Error initializing AudioWorklet:', error);
-          // Fallback: connect directly to destination
-        }
-      }
+      scheduledEndTimeRef.current = ctx.currentTime;
     }
+    return audioContextRef.current;
+  };
 
-    const ctx = audioContextRef.current;
+  const playAudioChunk = useCallback(async (base64Data) => {
+    const ctx = initAudioContext();
 
     try {
       const binaryString = atob(base64Data);
@@ -296,7 +286,6 @@ function HomePage() {
         bytes[i] = binaryString.charCodeAt(i);
       }
 
-      // PCM Int16 a Float32
       const samples = new Int16Array(bytes.buffer);
       const floatSamples = new Float32Array(samples.length);
       for (let i = 0; i < samples.length; i++) {
@@ -309,123 +298,35 @@ function HomePage() {
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
 
-      // Connect: Source -> AudioWorklet -> Speakers
-      if (lipSyncWorkletRef.current) {
-        source.connect(lipSyncWorkletRef.current);
-        // Worklet is already connected to destination
-      } else {
-        source.connect(ctx.destination);
-      }
+      // Connect to Speakers
+      source.connect(ctx.destination);
 
-      // Calculate RMS for audioLevel (simple approach for visualization)
-      let sumSquares = 0;
-      for (let i = 0; i < floatSamples.length; i++) {
-        sumSquares += floatSamples[i] * floatSamples[i];
+      // Connect to Avatar Stream (for Lip Sync Hook)
+      if (geminiAudioDestRef.current) {
+        source.connect(geminiAudioDestRef.current);
       }
-      const rms = Math.sqrt(sumSquares / floatSamples.length);
-      setAudioLevel(Math.min(1, rms * 5)); // Boost for visibility
 
       const startTime = Math.max(ctx.currentTime, scheduledEndTimeRef.current);
       source.start(startTime);
       scheduledEndTimeRef.current = startTime + audioBuffer.duration;
 
-      // Guardar referencia para interrupciones
       currentSourceRef.current = source;
       isPlayingRef.current = true;
 
       source.onended = () => {
-        if (currentSourceRef.current === source) {
-          currentSourceRef.current = null;
-        }
-        if (ctx.currentTime >= scheduledEndTimeRef.current - 0.05) {
-          isPlayingRef.current = false;
-          setAudioLevel(0);
-        }
+        if (currentSourceRef.current === source) currentSourceRef.current = null;
+        if (ctx.currentTime >= scheduledEndTimeRef.current - 0.05) isPlayingRef.current = false;
       };
 
     } catch (error) {
       console.error('Error audio:', error);
     }
-  }, [setAudioLevel]);
+  }, []);
 
-  // Analizar audio continuamente mientras reproduce (Volumen + LipSync)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const ctx = audioContextRef.current;
-      const analyzer = outputAnalyzerRef.current;
-
-      // 1. Análisis de Frecuencia (Lip Sync real)
-      if (ctx && analyzer && outputDataArrayRef.current) {
-        analyzer.getByteFrequencyData(outputDataArrayRef.current);
-
-        // Usar la función experta del hook para extraer fonemas
-        const lipSync = analyzeFrequencies(outputDataArrayRef.current, ctx.sampleRate);
-        if (lipSync) {
-          setLipSyncData(lipSync);
-          // Usar el nivel calculado por el analizador de frecuencias como fuente primaria
-          if (lipSync.level > 0.01) {
-            setAudioLevel(lipSync.level);
-            return; // Prioridad al analizador FFT
-          }
-        }
-      }
-
-      // 2. Fallback: Análisis de Time-Domain (RMS) si FFT no da datos
-      if (ctx && audioDataRef.current.length > 0) {
-        const currentTime = ctx.currentTime;
-
-        // Limpieza de chunks viejos
-        if (audioDataRef.current.length > 20) {
-          audioDataRef.current = audioDataRef.current.filter(d => d.startTime + (d.samples.length / 24000) > currentTime - 1);
-        }
-
-        for (const data of audioDataRef.current) {
-          const duration = data.samples.length / 24000;
-          if (currentTime >= data.startTime && currentTime < data.startTime + duration) {
-            const offset = Math.floor((currentTime - data.startTime) * 24000);
-            const windowSize = Math.min(2400, data.samples.length - offset); // 100ms
-            if (windowSize > 0) {
-              let sum = 0;
-              for (let i = 0; i < windowSize; i++) {
-                sum += data.samples[offset + i] * data.samples[offset + i];
-              }
-              const rms = Math.sqrt(sum / windowSize);
-              const level = Math.min(1, rms / 10000); // 10000 para normalizar PCM 16bit
-              setAudioLevel(level);
-            } else {
-              setAudioLevel(0);
-            }
-            return;
-          }
-        }
-      }
-
-      // Si no hay audio sonando activamente
-      setAudioLevel(0);
-      setLipSyncData(null);
-
-    }, 20); // 20ms (~50fps) para baja latencia y respuesta rápida
-
-    return () => clearInterval(interval);
-  }, [setAudioLevel, setLipSyncData, analyzeFrequencies]);
-
-  // Reproducir chunk MP3 (ElevenLabs)
   const playMp3Chunk = useCallback(async (base64Data) => {
-    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-      scheduledEndTimeRef.current = audioContextRef.current.currentTime;
-
-      // Inicializar analizador
-      outputAnalyzerRef.current = audioContextRef.current.createAnalyser();
-      outputAnalyzerRef.current.fftSize = 1024;
-      outputAnalyzerRef.current.smoothingTimeConstant = 0.5;
-      outputDataArrayRef.current = new Uint8Array(outputAnalyzerRef.current.frequencyBinCount);
-    }
-
-    const ctx = audioContextRef.current;
+    const ctx = initAudioContext();
 
     try {
-      // Convertir base64 a ArrayBuffer
       const binaryString = atob(base64Data);
       const len = binaryString.length;
       const bytes = new Uint8Array(len);
@@ -433,39 +334,32 @@ function HomePage() {
         bytes[i] = binaryString.charCodeAt(i);
       }
 
-      // Decodificar MP3
       const audioBuffer = await ctx.decodeAudioData(bytes.buffer);
-
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
 
-      // Conectar analizador para lip sync
-      if (outputAnalyzerRef.current) {
-        source.connect(outputAnalyzerRef.current);
-        outputAnalyzerRef.current.connect(ctx.destination);
-      } else {
-        source.connect(ctx.destination);
+      // Connect to Speakers
+      source.connect(ctx.destination);
+
+      // Connect to Avatar Stream
+      if (geminiAudioDestRef.current) {
+        source.connect(geminiAudioDestRef.current);
       }
 
       const startTime = Math.max(ctx.currentTime, scheduledEndTimeRef.current);
       source.start(startTime);
       scheduledEndTimeRef.current = startTime + audioBuffer.duration;
 
-      // Guardar referencia para interrupciones
       currentSourceRef.current = source;
       isPlayingRef.current = true;
 
       source.onended = () => {
-        if (currentSourceRef.current === source) {
-          currentSourceRef.current = null;
-        }
-        if (ctx.currentTime >= scheduledEndTimeRef.current - 0.05) {
-          isPlayingRef.current = false;
-        }
+        if (currentSourceRef.current === source) currentSourceRef.current = null;
+        if (ctx.currentTime >= scheduledEndTimeRef.current - 0.05) isPlayingRef.current = false;
       };
 
     } catch (error) {
-      console.error('Error decodificando MP3:', error);
+      console.error('Error MP3:', error);
     }
   }, []);
 
@@ -1030,7 +924,12 @@ function HomePage() {
             }}
           >
             <Suspense fallback={null}>
-              <Avatar3D audioLevel={audioLevel} lipSyncData={lipSyncState} />
+              <Avatar3D
+                audioStream={geminiStream}
+                audioLevel={audioLevel}
+                lipSyncData={lipSyncState}
+                emotionState={status.includes('Escuchando') ? 'neutral' : 'happy'}
+              />
               <Environment files="/background.jpg" background />
             </Suspense>
             <OrbitControls
