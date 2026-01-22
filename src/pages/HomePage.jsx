@@ -8,7 +8,11 @@ import useAudioAnalyzer from '../hooks/useAudioAnalyzer';
 import useGeminiSpanishLipSync from '../hooks/useGeminiSpanishLipSync';
 import '../App.css';
 
+
+
 function HomePage() {
+
+
   const [isConnected, setIsConnected] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [status, setStatus] = useState('Desconectado');

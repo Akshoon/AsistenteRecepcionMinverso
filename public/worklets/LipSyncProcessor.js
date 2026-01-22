@@ -1,11 +1,3 @@
-/**
- * LipSyncProcessor.js - AudioWorklet for Real-Time Spanish Lip-Sync
- * 
- * Extracts RMS (energy) and ZCR (fricative detection) from audio stream.
- * Runs in dedicated audio thread with 128-sample buffer (~5.3ms at 24kHz).
- * 
- * @author Antigravity
- */
 
 class LipSyncProcessor extends AudioWorkletProcessor {
     constructor() {

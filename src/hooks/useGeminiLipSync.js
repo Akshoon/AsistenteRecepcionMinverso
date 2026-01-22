@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import useFormantAnalyzer from './useFormantAnalyzer';
+import { blendPhonemes } from '../utils/spanishPhonemeMap';
 
 /**
- * useGeminiLipSync (DEFINITIVE VERSION)
+ * useGeminiLipSync (ENHANCED VERSION with Viseme Detection)
  * 
  * Implementación Final de Ingeniería Gráfica 3D & Audio DSP.
  * 
@@ -11,21 +13,38 @@ import * as THREE from 'three';
  * 1. FIX MANDÍBULA: Solo Morph Target 'Jaw_Open'. Bone.rotation PROHIBIDO.
  * 2. FIX ECO: Grafo de Audio Pasivo (Source -> Analyser). Sin salida a speakers.
  * 3. MICRO-COMPORTAMIENTOS: Respiración, Parpadeo Inteligente, Emociones Suaves.
+ * 4. NUEVA: Detección de Visemas basada en Formantes para fonemas españoles precisos.
  * 
  * @param {Object} props
  * @param {THREE.Group} props.scene - Avatar Scene Group
  * @param {MediaStream} props.audioStream - Input Stream (Gemini PCM -> MediaStream)
  * @param {string} props.currentEmotion - 'neutral', 'happy', 'sad', 'angry', 'surprised'
+ * @param {boolean} props.useAdvancedVisemes - Enable formant-based viseme detection (default: true)
  */
-export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 'neutral' }) {
+export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 'neutral', useAdvancedVisemes = true }) {
 
     // === CONFIGURACIÓN ===
     const CONFIG = {
-        SMOOTH_FACTOR: 0.8, // DSP Smoothing
-        JAW_MAX: 0.5,       // Max morph value
-        EMOTION_MAX: 0.2,   // Uncanny Valley Limit (Reduced for neutral)
-        BREATH_INTERVAL: 3000, // Min ms between breaths
+        SMOOTH_FACTOR: 0.4, // Reduced from 0.8 for faster DSP reactivity
+        JAW_MAX: 0.25,
+        EMOTION_MAX: 0.15,
+        BREATH_INTERVAL: 3000,
+        USE_ADVANCED_VISEMES: useAdvancedVisemes,
+        VISEME_BLEND_FACTOR: 0.15, // Reduced from 0.3 for faster phoneme transitions
     };
+
+    // === ADVANCED VISEME ANALYZER ===
+    const formantAnalyzer = useFormantAnalyzer(audioStream, {
+        fftSize: 2048,
+        minEnergyThreshold: 0.03
+    });
+
+    // Debug logging
+    useEffect(() => {
+        console.log('[useGeminiLipSync] Hook mounted/updated');
+        console.log('[useGeminiLipSync] audioStream:', audioStream ? 'EXISTS' : 'NULL', 'active:', audioStream?.active);
+        console.log('[useGeminiLipSync] Advanced visemes:', CONFIG.USE_ADVANCED_VISEMES);
+    }, [audioStream]);
 
     // === NOMBRES DE MORPHS ===
     const MORPHS = {
@@ -120,7 +139,10 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
         audioRefs.current.source = source;
         audioRefs.current.dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-        const handleInactive = () => resetFace();
+        const handleInactive = () => {
+            console.log('[useGeminiLipSync] audioStream inactive - Resetting face');
+            resetFace();
+        };
         audioStream.addEventListener('inactive', handleInactive);
 
         return () => {
@@ -137,6 +159,8 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
     useFrame((_, delta) => {
         // Safe check for delta
         if (!delta || isNaN(delta)) delta = 0.016; // Fallback to ~60fps
+        // Clamp delta to prevent "explosion" on tab switch (max 100ms)
+        delta = Math.min(delta, 0.1);
 
         const { analyser, dataArray, ctx } = audioRefs.current;
         const meshes = meshRefs.current.morphMeshes;
@@ -165,36 +189,192 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
         // Pero usamos FFT sum por eficiencia ya que ya tenemos dataArray frequency
         let totalEnergy = 0;
         for (let i = 0; i < dataArray.length; i++) totalEnergy += dataArray[i];
-        const rms = (totalEnergy / dataArray.length) / 255 * 4.5; // Reduced boost from 9.0 to 4.5
+        let rms = (totalEnergy / dataArray.length) / 255 * 4.5; // Reduced boost from 9.0 to 4.5
+
+        // === NOISE GATE ===
+        // If rms is very low, force it to 0 to prevent "hanging" mouth
+        const NOISE_THRESHOLD = 0.1; // Increased from 0.02 to 0.1 to catch 0.06 noise
+        if (rms < NOISE_THRESHOLD) rms = 0;
 
         // ZCR Proxy (Ratio High/Low)
         const zcr = high; // Simplificado para eficiencia en frame loop
 
-        // --- B. LÓGICA FONÉTICA (ESPAÑOL FEMENINO) ---
-        const epsilon = 0.0001;
-        const total = low + mid + high + epsilon;
+        // --- B. DETECCIÓN DE VISEMAS (Advanced Mode o Fallback) ---
+        let TARGETS = {};
 
-        // 1. Mandíbula (Driver Maestro) - FIX MESH DETACHMENT
-        // Mayor sensibilidad (pow 0.6) pero controlada
-        const targetJaw = Math.pow(rms, 0.6) * CONFIG.JAW_MAX;
-        // Suavizado Lerp
-        const currentJaw = THREE.MathUtils.lerp(state.current.currentValues.Jaw_Open, targetJaw, 0.2);
-        state.current.currentValues.Jaw_Open = currentJaw;
+        if (CONFIG.USE_ADVANCED_VISEMES && formantAnalyzer) {
+            // === NUEVO: ANÁLISIS BASADO EN FORMANTES ===
+            const visemeData = formantAnalyzer.analyze();
 
-        // 2. Vocales (Multiplicadores ajustados a mitad de boost)
-        const targetAh = (low / total) * rms * 1.0;
-        const targetOh = (low / total) * rms * 0.6;
-        const targetWoo = (low / total) * rms * 0.5;
-        const targetEE = (mid / total) * rms * 0.9;
-        const targetIH = (mid / total) * rms * 0.6;
+            // DEBUG: Log detection results (reduce logging)
+            if (visemeData && visemeData.currentPhoneme && visemeData.currentPhoneme !== 'SIL' && Math.random() < 0.1) {
+                console.log('[VISEME]', visemeData.currentPhoneme, 'conf:', visemeData.confidence?.toFixed(2));
+            }
 
-        // 3. Consonantes (ZCR Driven) - Reduced sensititivy (2.5)
-        const c = Math.max(0, Math.min(1, zcr * 2.5));
-        const targetSZ = c * 0.25;
-        const targetFV = c * 0.2;
-        const targetTLDN = c * 0.2;
+            if (visemeData && visemeData.currentMorphs) {
+                // RMS SUPREMACY: Si el volumen es bajo, IGNORAR detección de fonemas (es ruido)
+                if (rms === 0) { // NOISE_THRESHOLD forces rms to 0 above
+                    // Force Silence
+                    visemeData.currentMorphs = { Jaw_Open: 0 };
+                    visemeData.currentPhoneme = 'SIL';
+                }
 
-        // --- C. MICRO-COMPORTAMIENTOS ---
+                // Usar morphs detectados por el analizador de formantes
+                const rawTargets = { ...visemeData.currentMorphs };
+
+                // Ajustar Jaw_Open según energía RMS (driver maestro) con dampening adicional
+                let targetJaw = Math.pow(rms, 0.7) * CONFIG.JAW_MAX * 0.85; // Reducido con factor 0.85
+
+                // AGGRESSIVE JAW CLAMP: Si es menor al 10% de apertura, forzar a 0 absoluto
+                if (targetJaw < 0.1 * CONFIG.JAW_MAX) { // e.g. < 0.025
+                    targetJaw = 0;
+                }
+
+                // Si el fonema ya tiene Jaw_Open, lo combinamos con RMS pero limitamos
+                if (rawTargets['Jaw_Open']) {
+                    rawTargets['Jaw_Open'] = Math.min(
+                        Math.max(rawTargets['Jaw_Open'], targetJaw * 0.75),
+                        CONFIG.JAW_MAX * 0.9 // Límite absoluto
+                    );
+                } else {
+                    rawTargets['Jaw_Open'] = targetJaw;
+                }
+
+                // === ADVANCED MULTI-FRAME SMOOTHING ===
+                // Mantener historial de los últimos 3 frames para suavizado temporal
+                if (!state.current.morphHistory) {
+                    state.current.morphHistory = [];
+                }
+
+                // SILENCE CLEAR: If hard silence (gate closed) OR forced zero jaw
+                if ((rms === 0 || targetJaw === 0) && state.current.morphHistory.length > 0) {
+                    state.current.morphHistory = [];
+                }
+
+                // Agregar frame actual al historial
+                state.current.morphHistory.push(rawTargets);
+                if (state.current.morphHistory.length > 3) {
+                    state.current.morphHistory.shift(); // Reduced history from 5 to 3 for less lag
+                }
+
+                // CO-ARTICULATION WEIGHTS: Favor current frame heavily for reactivity
+                const weights = [0.10, 0.20, 0.70]; // Total = 1.0 (70% weight to newest frame)
+                const blendedTargets = {};
+
+                // Obtener todas las claves de morph únicas (managed morphs + current frame)
+                const managedMorphs = ['Jaw_Open', 'Ah', 'Oh', 'W_OO', 'EE', 'IH', 'S_Z', 'F_V', 'T_L_D_N'];
+                const allMorphKeys = new Set([...managedMorphs]);
+                state.current.morphHistory.forEach(frame => {
+                    Object.keys(frame).forEach(key => allMorphKeys.add(key));
+                });
+
+                // Promediar cada morph con pesos
+                allMorphKeys.forEach(morphName => {
+                    let weightedSum = 0;
+                    let totalWeight = 0;
+
+                    state.current.morphHistory.forEach((frame, idx) => {
+                        const value = frame[morphName] || 0;
+                        const weight = weights[idx] || 0.20;
+                        weightedSum += value * weight;
+                        totalWeight += weight;
+                    });
+
+                    // CO-ARTICULATION BLENDING
+                    const prevValue = state.current.currentValues[morphName] || 0;
+                    const computedTarget = totalWeight > 0 ? weightedSum / totalWeight : 0;
+
+                    blendedTargets[morphName] = THREE.MathUtils.lerp(computedTarget, prevValue, CONFIG.VISEME_BLEND_FACTOR);
+                });
+
+                // Aplicar suavizado adicional con lerp variable (Time-Based)
+                TARGETS = {};
+                // Velocidades de interpolación (Aumentadas para mayor reactividad)
+                const SPEED_ATTACK = 22.0; // Increased from 10.0
+                const SPEED_DECAY = 14.0;   // Increased from 4.0
+                const SPEED_SILENCE = 24.0; // Faster silence snap
+
+                allMorphKeys.forEach(morphName => {
+                    const targetValue = blendedTargets[morphName] || 0;
+                    const currentValue = state.current.currentValues[morphName] || 0;
+
+                    // Detectar silencio: si el target es muy bajo, usar velocidad de silencio para cerrar
+                    const isSilence = targetValue < 0.01;
+
+                    // Elegir velocidad
+                    let speed;
+                    if (isSilence && currentValue > 0.01) {
+                        speed = SPEED_SILENCE;
+                    } else {
+                        speed = targetValue > currentValue ? SPEED_ATTACK : SPEED_DECAY;
+                    }
+
+                    // Lerp independiente del framerate
+                    const t = Math.min(1, speed * delta);
+                    TARGETS[morphName] = THREE.MathUtils.lerp(currentValue, targetValue, t);
+
+                    // Force absolute zero check to avoid micro-values hanging
+                    if (isSilence && TARGETS[morphName] < 0.002) {
+                        TARGETS[morphName] = 0;
+                    }
+
+                    // Update state for next frame
+                    state.current.currentValues[morphName] = TARGETS[morphName];
+                });
+
+                // DEBUG: Reduced logging
+                if (TARGETS['Jaw_Open'] > 0.05 && Math.random() < 0.05) {
+                    console.log('[TARGETS] Jaw:', TARGETS['Jaw_Open'].toFixed(2));
+                }
+            } else {
+                // Fallback a silencio si no hay detección - smooth return to 0
+                TARGETS = {};
+                Object.keys(state.current.currentValues).forEach(key => {
+                    const current = state.current.currentValues[key] || 0;
+                    TARGETS[key] = THREE.MathUtils.lerp(current, 0, 0.06); // Muy lento fade to neutral
+                    state.current.currentValues[key] = TARGETS[key];
+                });
+            }
+        } else {
+            // === FALLBACK: LÓGICA HEURÍSTICA ORIGINAL ===
+            const epsilon = 0.0001;
+            const total = low + mid + high + epsilon;
+
+            // 1. Mandíbula (Driver Maestro) - FIX MESH DETACHMENT
+            const targetJaw = Math.pow(rms, 0.6) * CONFIG.JAW_MAX;
+            state.current.currentValues.Jaw_Open = targetJaw;
+
+            // 2. Vocales (Multiplicadores ajustados a mitad de boost)
+            const targetAh = (low / total) * rms * 1.0;
+            const targetOh = (low / total) * rms * 0.6;
+            const targetWoo = (low / total) * rms * 0.5;
+            const targetEE = (mid / total) * rms * 0.9;
+            const targetIH = (mid / total) * rms * 0.6;
+
+            // 3. Consonantes (ZCR Driven) - Reduced sensititivy (2.5)
+            const c = Math.max(0, Math.min(1, zcr * 2.5));
+            const targetSZ = c * 0.25;
+            const targetFV = c * 0.2;
+            const targetTLDN = c * 0.2;
+
+            // Build TARGETS for fallback mode
+            const currentJaw = THREE.MathUtils.lerp(state.current.currentValues.Jaw_Open, targetJaw, 0.2);
+            state.current.currentValues.Jaw_Open = currentJaw;
+
+            TARGETS = {
+                [MORPHS.JAW]: currentJaw,
+                [MORPHS.AH]: THREE.MathUtils.lerp(state.current.currentValues.Ah, targetAh, 0.1),
+                [MORPHS.OH]: THREE.MathUtils.lerp(state.current.currentValues.Oh, targetOh, 0.1),
+                [MORPHS.WOO]: THREE.MathUtils.lerp(state.current.currentValues.W_OO, targetWoo, 0.1),
+                [MORPHS.EE]: THREE.MathUtils.lerp(state.current.currentValues.EE, targetEE, 0.1),
+                [MORPHS.IH]: THREE.MathUtils.lerp(state.current.currentValues.IH, targetIH, 0.1),
+                [MORPHS.SZ]: THREE.MathUtils.lerp(state.current.currentValues.S_Z, targetSZ, 0.1),
+                [MORPHS.FV]: THREE.MathUtils.lerp(state.current.currentValues.F_V, targetFV, 0.1),
+                [MORPHS.TLDN]: THREE.MathUtils.lerp(state.current.currentValues.T_L_D_N, targetTLDN, 0.1)
+            };
+        }
+
+        // --- C. MICRO-COMPORTAMIENTOS (Shared for both modes) ---
 
         // Respiración (Breathing)
         state.current.breathTimer += delta * 1000;
@@ -207,6 +387,11 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
             breathValue = cycle * 0.05;
         } else {
             state.current.isBreathing = false;
+        }
+
+        // Add breathing to Jaw if not already at max
+        if (TARGETS[MORPHS.JAW] !== undefined) {
+            TARGETS[MORPHS.JAW] = Math.min(TARGETS[MORPHS.JAW] + breathValue, CONFIG.JAW_MAX);
         }
 
         // Parpadeo Inteligente (Smart Blink)
@@ -222,7 +407,6 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
         }
 
         // Animación Blink
-        let blinkTarget = 0;
         const blkSpeed = (currentEmotion === 'sad') ? 8 : 15; // Lento si triste
 
         if (state.current.blink.closing) {
@@ -237,22 +421,9 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
         }
         const blinkVal = state.current.blink.value;
 
-        // --- D. APLICACIÓN A MESHES ---
-
-        // Mapa de valores finales
-        const TARGETS = {
-            [MORPHS.JAW]: currentJaw + breathValue, // Add breathing
-            [MORPHS.AH]: THREE.MathUtils.lerp(state.current.currentValues.Ah, targetAh, 0.1),
-            [MORPHS.OH]: THREE.MathUtils.lerp(state.current.currentValues.Oh, targetOh, 0.1),
-            [MORPHS.WOO]: THREE.MathUtils.lerp(state.current.currentValues.W_OO, targetWoo, 0.1),
-            [MORPHS.EE]: THREE.MathUtils.lerp(state.current.currentValues.EE, targetEE, 0.1),
-            [MORPHS.IH]: THREE.MathUtils.lerp(state.current.currentValues.IH, targetIH, 0.1),
-            [MORPHS.SZ]: THREE.MathUtils.lerp(state.current.currentValues.S_Z, targetSZ, 0.1), // Smoother consonants
-            [MORPHS.FV]: THREE.MathUtils.lerp(state.current.currentValues.F_V, targetFV, 0.1),
-            [MORPHS.TLDN]: THREE.MathUtils.lerp(state.current.currentValues.T_L_D_N, targetTLDN, 0.1),
-            [MORPHS.BLINK_L]: blinkVal,
-            [MORPHS.BLINK_R]: blinkVal
-        };
+        // Add blink to TARGETS
+        TARGETS[MORPHS.BLINK_L] = blinkVal;
+        TARGETS[MORPHS.BLINK_R] = blinkVal;
 
         // Guardar estado
         state.current.currentValues = {
@@ -276,36 +447,25 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
         meshes.forEach(mesh => {
             if (!mesh.morphTargetDictionary || !mesh.morphTargetInfluences) return;
 
-            const setVal = (key, val) => {
-                const idx = mesh.morphTargetDictionary[key];
-                if (idx !== undefined) mesh.morphTargetInfluences[idx] = Math.min(val, 1);
-            };
-
-            const addVal = (key, val) => {
-                const idx = mesh.morphTargetDictionary[key];
-                if (idx !== undefined) {
-                    const curr = mesh.morphTargetInfluences[idx];
-                    mesh.morphTargetInfluences[idx] = Math.min(curr + val, 1);
+            // 1. Lipsync Base - Apply directly from TARGETS
+            Object.entries(TARGETS).forEach(([morphName, value]) => {
+                const idx = mesh.morphTargetDictionary[morphName];
+                if (idx !== undefined && value !== undefined) {
+                    mesh.morphTargetInfluences[idx] = Math.min(Math.max(value, 0), 1);
                 }
-            };
-
-            // 1. Lipsync Base
-            Object.entries(TARGETS).forEach(([k, v]) => setVal(k, v));
+            });
 
             // 2. Emociones (Suavizadas)
             Object.entries(activeEmotion).forEach(([k, v]) => {
                 // Lerp emotion state
                 const current = state.current.currentEmotions[k] || 0;
-                const next = THREE.MathUtils.lerp(current, Math.min(v, CONFIG.EMOTION_MAX), 0.1);
+                const next = THREE.MathUtils.lerp(current, Math.min(v, CONFIG.EMOTION_MAX), delta * 2.0); // Slower emotion transition
                 state.current.currentEmotions[k] = next;
 
-                // FIX ACCUMULATION BUG:
-                // Si el morph ya fue seteado por TARGETS (ej. Jaw_Open), sumamos (addVal).
-                // Si es un morph puro de emoción (ej. Smile), lo sobrescribimos (setVal) para evitar acumulación infinita.
-                if (TARGETS[k] !== undefined) {
-                    addVal(k, next);
-                } else {
-                    setVal(k, next);
+                const idx = mesh.morphTargetDictionary[k];
+                if (idx !== undefined) {
+                    const existing = TARGETS[k] !== undefined ? mesh.morphTargetInfluences[idx] : 0;
+                    mesh.morphTargetInfluences[idx] = Math.min(existing + next, 1);
                 }
             });
 
@@ -313,14 +473,14 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
             Object.keys(state.current.currentEmotions).forEach(k => {
                 if (activeEmotion[k] === undefined) {
                     const current = state.current.currentEmotions[k];
-                    const next = THREE.MathUtils.lerp(current, 0, 0.1);
+                    const next = THREE.MathUtils.lerp(current, 0, delta * 2.0); // Slow fade out
                     state.current.currentEmotions[k] = next;
 
                     if (next > 0.001) {
-                        if (TARGETS[k] !== undefined) {
-                            addVal(k, next);
-                        } else {
-                            setVal(k, next);
+                        const idx = mesh.morphTargetDictionary[k];
+                        if (idx !== undefined) {
+                            const existing = TARGETS[k] !== undefined ? mesh.morphTargetInfluences[idx] : 0;
+                            mesh.morphTargetInfluences[idx] = Math.min(existing + next, 1);
                         }
                     }
                     else delete state.current.currentEmotions[k];
