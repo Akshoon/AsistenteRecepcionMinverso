@@ -67,7 +67,7 @@ export class GeminiAudioService {
         }
 
         try {
-            // Modelo correcto según documentación oficial de Google
+
             const model = 'gemini-2.5-flash-native-audio-preview-12-2025';
 
             // Config para Live API con audio nativo
@@ -117,8 +117,8 @@ export class GeminiAudioService {
                 },
             });
 
-            // Esperar a que se conecte
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // No esperar artificialmente, la sesión es asíncrona por naturaleza
+            // await new Promise(resolve => setTimeout(resolve, 500));
 
             if (!this.isConnected) {
                 throw new Error('La sesión se cerró inmediatamente');

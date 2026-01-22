@@ -25,18 +25,22 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
 
     // === CONFIGURACIÓN ===
     const CONFIG = {
-        SMOOTH_FACTOR: 0.4, // Reduced from 0.8 for faster DSP reactivity
+        SMOOTH_FACTOR: 0.5, // RMS_SmoothingFactor
         JAW_MAX: 0.25,
         EMOTION_MAX: 0.15,
         BREATH_INTERVAL: 3000,
         USE_ADVANCED_VISEMES: useAdvancedVisemes,
-        VISEME_BLEND_FACTOR: 0.15, // Reduced from 0.3 for faster phoneme transitions
+        VISEME_BLEND_FACTOR: 0.3,
+        JAW_SMOOTH_FACTOR: 0.1,    // jawSmoothFactor
+        EMOTION_SMOOTH_FACTOR: 0.1, // emotionSmoothFactor
+        COARTICULACION_SMOOTH_FACTOR: 0.15 // coarticulacion_smooth_factor
     };
 
     // === ADVANCED VISEME ANALYZER ===
     const formantAnalyzer = useFormantAnalyzer(audioStream, {
         fftSize: 2048,
-        minEnergyThreshold: 0.03
+        minEnergyThreshold: 0.03,
+        smoothingTimeConstant: CONFIG.SMOOTH_FACTOR
     });
 
     // Debug logging
@@ -284,7 +288,7 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
                     const prevValue = state.current.currentValues[morphName] || 0;
                     const computedTarget = totalWeight > 0 ? weightedSum / totalWeight : 0;
 
-                    blendedTargets[morphName] = THREE.MathUtils.lerp(computedTarget, prevValue, CONFIG.VISEME_BLEND_FACTOR);
+                    blendedTargets[morphName] = THREE.MathUtils.lerp(computedTarget, prevValue, CONFIG.COARTICULACION_SMOOTH_FACTOR);
                 });
 
                 // Aplicar suavizado adicional con lerp variable (Time-Based)
@@ -311,7 +315,8 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
 
                     // Lerp independiente del framerate
                     const t = Math.min(1, speed * delta);
-                    TARGETS[morphName] = THREE.MathUtils.lerp(currentValue, targetValue, t);
+                    const finalLerp = morphName === 'Jaw_Open' ? CONFIG.JAW_SMOOTH_FACTOR : t;
+                    TARGETS[morphName] = THREE.MathUtils.lerp(currentValue, targetValue, finalLerp);
 
                     // Force absolute zero check to avoid micro-values hanging
                     if (isSilence && TARGETS[morphName] < 0.002) {
@@ -459,7 +464,7 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
             Object.entries(activeEmotion).forEach(([k, v]) => {
                 // Lerp emotion state
                 const current = state.current.currentEmotions[k] || 0;
-                const next = THREE.MathUtils.lerp(current, Math.min(v, CONFIG.EMOTION_MAX), delta * 2.0); // Slower emotion transition
+                const next = THREE.MathUtils.lerp(current, Math.min(v, CONFIG.EMOTION_MAX), CONFIG.EMOTION_SMOOTH_FACTOR);
                 state.current.currentEmotions[k] = next;
 
                 const idx = mesh.morphTargetDictionary[k];

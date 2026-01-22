@@ -19,8 +19,8 @@ export default function useFormantAnalyzer(audioStream, options = {}) {
         smoothingTimeConstant: 0.3, // Reduced from 0.6 for faster detection
         minEnergyThreshold: 0.03, // Minimum RMS to trigger detection
         formantSearchRange: {
-            F1: { min: 200, max: 1000 },
-            F2: { min: 800, max: 2800 }
+            F1: { min: 200, max: 1100 },  // Slightly higher max for female voice
+            F2: { min: 800, max: 3200 }   // Higher max for female resonant frequencies
         },
         ...options
     };

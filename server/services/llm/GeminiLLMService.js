@@ -54,7 +54,7 @@ export class GeminiLLMService extends BaseLLM {
         ];
 
         this.model = this.genAI.getGenerativeModel({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-flash",
             systemInstruction: this.systemInstruction,
             tools: this.toolsConfig
         });
@@ -152,48 +152,48 @@ export class GeminiLLMService extends BaseLLM {
 
         while (functionCalls && functionCalls.length > 0 && toolIterations < MAX_TOOL_ITERATIONS) {
             toolIterations++;
-            console.log(`GeminiLLMService: Iteración de tools ${toolIterations}/${MAX_TOOL_ITERATIONS}`);
+            console.log(`GeminiLLMService: Iteración de tools ${toolIterations}/${MAX_TOOL_ITERATIONS} (${functionCalls.length} calls)`);
 
-            for (const call of functionCalls) {
+            // Ejecutar TODOS los tool calls en PARALELO
+            const toolResults = await Promise.all(functionCalls.map(async (call) => {
                 console.log('GeminiLLMService: Tool call:', call.name, call.args);
 
-                let toolResult;
+                let result;
                 if (this.toolHandler) {
                     try {
-                        toolResult = await this.toolHandler(call);
+                        result = await this.toolHandler(call);
                     } catch (toolError) {
                         console.error(`GeminiLLMService: Error en tool ${call.name}:`, toolError);
-                        toolResult = { error: `Error ejecutando ${call.name}: ${toolError.message}` };
+                        result = { error: `Error ejecutando ${call.name}: ${toolError.message}` };
                     }
                 } else {
                     console.warn("No hay toolHandler configurado");
-                    toolResult = { error: "Tool handler not configured" };
+                    result = { error: "Tool handler not configured" };
                 }
 
-                console.log(`GeminiLLMService: Tool result ${call.name}:`, JSON.stringify(toolResult).substring(0, 200));
+                console.log(`GeminiLLMService: Tool result ${call.name}:`, JSON.stringify(result).substring(0, 200));
 
                 // Callback para efectos secundarios
-                if (onToolAction && toolResult) {
-                    onToolAction(call.name, toolResult);
+                if (onToolAction && result) {
+                    onToolAction(call.name, result);
                 }
 
-                // Enviar resultado del tool de vuelta al modelo CON RETRY
-                const result2 = await this._withRetry(
-                    () => chatSession.sendMessage([
-                        {
-                            functionResponse: {
-                                name: call.name,
-                                response: toolResult
-                            }
-                        }
-                    ]),
-                    `functionResponse ${call.name}`
-                );
+                return {
+                    functionResponse: {
+                        name: call.name,
+                        response: result
+                    }
+                };
+            }));
 
-                response = await result2.response;
-                responseText = this._safeGetText(response);
-            }
+            // Enviar TODOS los resultados de vuelta en un solo mensaje
+            const result2 = await this._withRetry(
+                () => chatSession.sendMessage(toolResults),
+                `functionResponses (${functionCalls.length} tools)`
+            );
 
+            response = await result2.response;
+            responseText = this._safeGetText(response);
             functionCalls = response.functionCalls();
         }
 

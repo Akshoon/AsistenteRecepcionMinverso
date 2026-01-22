@@ -12,11 +12,11 @@
  * Used for acoustic detection and classification
  */
 export const SPANISH_VOWEL_FORMANTS = {
-    '/a/': { F1: [600, 900], F2: [1100, 1400], viseme: 'AH' },
-    '/e/': { F1: [400, 600], F2: [1800, 2200], viseme: 'EH' },
-    '/i/': { F1: [250, 350], F2: [2200, 2600], viseme: 'IY' },
-    '/o/': { F1: [400, 600], F2: [800, 1100], viseme: 'OH' },
-    '/u/': { F1: [250, 350], F2: [600, 900], viseme: 'UW' }
+    '/a/': { F1: [650, 950], F2: [1200, 1500], viseme: 'AH' },
+    '/e/': { F1: [450, 650], F2: [1900, 2300], viseme: 'EH' },
+    '/i/': { F1: [300, 400], F2: [2300, 2800], viseme: 'IY' },
+    '/o/': { F1: [450, 650], F2: [900, 1200], viseme: 'OH' },
+    '/u/': { F1: [300, 400], F2: [700, 1000], viseme: 'UW' }
 };
 
 /**
@@ -63,9 +63,10 @@ export const PHONEME_TO_MORPH_MAP = {
     '/a/': {
         viseme: 'AH',
         morphs: {
-            'Ah': 0.55,        // Reduced from 0.75
-            'Jaw_Open': 0.30,  // Reduced from 0.45
-            'AE': 0.15         // Reduced from 0.25
+            'Ah': 0.55,
+            'Jaw_Open': 0.4,
+            'Mouth_Smile_L': 0.2,
+            'Mouth_Smile_R': 0.2
         },
         description: 'Open central vowel - wide mouth'
     },
@@ -73,9 +74,10 @@ export const PHONEME_TO_MORPH_MAP = {
     '/e/': {
         viseme: 'EH',
         morphs: {
-            'EE': 0.50,        // Reduced from 0.65
-            'Jaw_Open': 0.12,  // Reduced from 0.20
-            'IH': 0.18         // Reduced from 0.25
+            'EE': 0.50,
+            'Jaw_Open': 0.25,
+            'Mouth_Smile_L': 0.2,
+            'Mouth_Smile_R': 0.2
         },
         description: 'Mid front vowel - spread lips'
     },
@@ -83,10 +85,10 @@ export const PHONEME_TO_MORPH_MAP = {
     '/i/': {
         viseme: 'IY',
         morphs: {
-            'EE': 0.65,        // Reduced from 0.85
-            'Jaw_Open': 0.05,  // Reduced from 0.10
-            'Mouth_Smile_L': 0.08,  // Reduced from 0.12
-            'Mouth_Smile_R': 0.08   // Reduced from 0.12
+            'EE': 0.65,
+            'Jaw_Open': 0.2,
+            'Mouth_Smile_L': 0.25,
+            'Mouth_Smile_R': 0.25
         },
         description: 'High front vowel - tense smile'
     },
@@ -94,9 +96,11 @@ export const PHONEME_TO_MORPH_MAP = {
     '/o/': {
         viseme: 'OH',
         morphs: {
-            'Oh': 0.55,        // Reduced from 0.75
-            'W_OO': 0.28,      // Reduced from 0.40
-            'Jaw_Open': 0.15   // Reduced from 0.25
+            'Oh': 0.55,
+            'W_OO': 0.28,
+            'Jaw_Open': 0.3,
+            'Mouth_Smile_L': 0.1,
+            'Mouth_Smile_R': 0.1
         },
         description: 'Mid back vowel - rounded lips'
     },
@@ -104,17 +108,18 @@ export const PHONEME_TO_MORPH_MAP = {
     '/u/': {
         viseme: 'UW',
         morphs: {
-            'W_OO': 0.65,      // Reduced from 0.85
-            'Oh': 0.20,        // Reduced from 0.30
-            'Jaw_Open': 0.08   // Reduced from 0.15
+            'W_OO': 0.65,
+            'Mouth_Pucker_Up_L': 0.3,
+            'Mouth_Pucker_Up_R': 0.3,
+            'Jaw_Open': 0.2
         },
         description: 'High back vowel - tight rounded lips'
     },
 
     // === BILABIAL CONSONANTS ===
-    '/p/': { viseme: 'BMP', morphs: { 'B_M_P': 0.60, 'Jaw_Open': 0.0 }, description: 'Voiceless bilabial plosive' },
-    '/b/': { viseme: 'BMP', morphs: { 'B_M_P': 0.55, 'Jaw_Open': 0.03 }, description: 'Voiced bilabial plosive' },
-    '/m/': { viseme: 'BMP', morphs: { 'B_M_P': 0.50, 'Jaw_Open': 0.05 }, description: 'Bilabial nasal' },
+    '/p/': { viseme: 'BMP', morphs: { 'B_M_P': 0.7, 'Jaw_Open': 0.0 }, description: 'Voiceless bilabial plosive' },
+    '/b/': { viseme: 'BMP', morphs: { 'B_M_P': 0.7, 'Jaw_Open': 0.03 }, description: 'Voiced bilabial plosive' },
+    '/m/': { viseme: 'BMP', morphs: { 'B_M_P': 0.65, 'Jaw_Open': 0.05 }, description: 'Bilabial nasal' },
 
     // === LABIODENTAL CONSONANTS ===
     '/f/': { viseme: 'FV', morphs: { 'F_V': 0.60, 'Jaw_Open': 0.08 }, description: 'Voiceless labiodental fricative' },

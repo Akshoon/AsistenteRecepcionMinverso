@@ -624,7 +624,7 @@ wss.on('connection', async (ws) => {
 
     try {
         await llmService.initialize();
-        console.log('LLM Service (gemini-2.5-flash) inicializado');
+        console.log('LLM Service (gemini-2.0-flash) inicializado');
     } catch (error) {
         console.error("Error inicializando LLM:", error);
         ws.send(JSON.stringify({ type: 'error', message: 'Error inicializando IA' }));
