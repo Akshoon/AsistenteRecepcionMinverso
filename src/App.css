@@ -60,7 +60,6 @@ body {
   letter-spacing: 0.02em;
   background: rgba(255, 255, 255, 0.05);
   color: #ffffff;
-  backdrop-filter: blur(10px);
 }
 
 .btn:hover {
@@ -178,7 +177,6 @@ body {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(8px);
 }
 
 .modal-content {

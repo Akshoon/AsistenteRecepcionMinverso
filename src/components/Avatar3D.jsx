@@ -23,20 +23,22 @@ import useGeminiLipSync from '../hooks/useGeminiLipSync';
  * @param {Object} props.audioFeatures - New audio features { rms, low, mid, high, zcr }
  * @param {string} props.emotionState - Emotion: "neutral" | "happy" | "sad" | "angry" | "surprised"
  */
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
 export default function Avatar3D({
-    audioStream = null, // New Prop: MediaStream
+    audioStream = null,
     emotionState = 'neutral',
-    // Legacy props kept for compatibility but unused by new hook
+    modelPath = '/avatar.glb',
+    // Legacy props kept for compatibility
     audioLevel = 0,
     lipSyncData = null,
     audioFeatures = null
 }) {
     const group = useRef();
-    const { scene } = useGLTF('/avatar.glb');
+    const { scene } = useGLTF(modelPath);
     const { gl } = useThree();
 
     // === NEW HOOK IMPLEMENTATION ===
-    // Handles all lip-sync, jaw physics, morphs, and blinking internally
     useGeminiLipSync({
         scene,
         audioStream,
@@ -45,10 +47,11 @@ export default function Avatar3D({
 
     // === UTILITIES ===
     useEffect(() => {
+        if (!scene) return;
         // Simplify materials for performance
         scene.traverse((child) => {
             if (child.isMesh && child.material) {
-                child.material.envMapIntensity = 0.5;
+                child.material.envMapIntensity = isMobile ? 0.25 : 0.5;
                 child.material.needsUpdate = true;
             }
         });
@@ -69,18 +72,32 @@ export default function Avatar3D({
     }, [gl]);
 
     // === IDLE ANIMATION (ARMS/BODY ONLY) ===
-    // Lip-sync and Face are handled by the hook. Here we handle body posture.
-    useFrame((state) => {
-        const t = state.clock.getElapsedTime();
+    const bonesRef = useRef({
+        lArm: null, rArm: null, lFore: null, rFore: null
+    });
 
-        // Arm Posture (Static/Idle)
-        // We find bones manually here since refs are inside the hook now, 
-        // or we could traverse once. For safety/speed we traverse if needed or cache.
-        // For strictly keeping it simple:
-        const lArm = scene.getObjectByName('CC_Base_L_Upperarm');
-        const rArm = scene.getObjectByName('CC_Base_R_Upperarm');
-        const lFore = scene.getObjectByName('CC_Base_L_Forearm');
-        const rFore = scene.getObjectByName('CC_Base_R_Forearm');
+    useEffect(() => {
+        if (!scene) return;
+        bonesRef.current = {
+            lArm: scene.getObjectByName('CC_Base_L_Upperarm'),
+            rArm: scene.getObjectByName('CC_Base_R_Upperarm'),
+            lFore: scene.getObjectByName('CC_Base_L_Forearm'),
+            rFore: scene.getObjectByName('CC_Base_R_Forearm')
+        };
+    }, [scene]);
+
+    // FPS Capping for Mobile (30 FPS)
+    const frameTimeRef = useRef(0);
+
+    useFrame((_, delta) => {
+        // Limit to 30 FPS on mobile to save battery and reduce CPU heat
+        if (isMobile) {
+            frameTimeRef.current += delta;
+            if (frameTimeRef.current < 1 / 30) return;
+            frameTimeRef.current = 0;
+        }
+
+        const { lArm, rArm, lFore, rFore } = bonesRef.current;
 
         if (lArm) { lArm.rotation.z = -1.4; lArm.rotation.x = 0; lArm.rotation.y = 0; }
         if (rArm) { rArm.rotation.z = 1.4; rArm.rotation.x = 0; rArm.rotation.y = 0; }
@@ -94,5 +111,3 @@ export default function Avatar3D({
         </group>
     );
 }
-
-useGLTF.preload('/avatar.glb');

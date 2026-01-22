@@ -54,7 +54,7 @@ export class GeminiLLMService extends BaseLLM {
         ];
 
         this.model = this.genAI.getGenerativeModel({
-            model: "gemini-3-flash",
+            model: "gemini-2.5-flash",
             systemInstruction: this.systemInstruction,
             tools: this.toolsConfig
         });

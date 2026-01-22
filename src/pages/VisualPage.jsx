@@ -2,7 +2,6 @@ import { useState, useRef, useCallback, useEffect, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment } from '@react-three/drei';
 import Avatar3D from '../components/Avatar3D';
-import useAudioAnalyzer from '../hooks/useAudioAnalyzer';
 import '../App.css';
 
 // Detectar móvil
@@ -10,7 +9,6 @@ const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/
 
 function VisualPage() {
     const [isConnected, setIsConnected] = useState(false);
-    const [isRecording, setIsRecording] = useState(false);
     const [status, setStatus] = useState('Desconectado');
 
     const wsRef = useRef(null);
@@ -21,7 +19,6 @@ function VisualPage() {
     const isPlayingRef = useRef(false);
     const isRecordingRef = useRef(false);
 
-    const { audioLevel, setAudioLevel, lipSyncData, setLipSyncData, analyzeFrequencies } = useAudioAnalyzer();
     const scheduledEndTimeRef = useRef(0);
     const audioDataRef = useRef([]);
 
@@ -29,33 +26,43 @@ function VisualPage() {
     const outputDataArrayRef = useRef(null);
     const currentSourceRef = useRef(null);
 
+    // NEW: Audio Stream Destination for Hook
+    const audioDestinationRef = useRef(null);
+    const [outputStream, setOutputStream] = useState(null);
+
+    // NEW: DOM refs for fast updates
+    const audioBarRef = useRef(null);
+
     // Detener reproducción actual (Interrupción)
     const stopPlayback = useCallback(() => {
         if (currentSourceRef.current) {
             try {
                 currentSourceRef.current.stop();
-            } catch (e) {
-                // Ignorar errores si ya estaba detenido
-            }
+            } catch (e) { }
             currentSourceRef.current = null;
         }
         audioQueueRef.current = [];
         if (audioContextRef.current) {
             scheduledEndTimeRef.current = audioContextRef.current.currentTime;
         }
-        setAudioLevel(0);
-        setLipSyncData(null);
         isPlayingRef.current = false;
-    }, [setAudioLevel, setLipSyncData]);
+        if (audioBarRef.current) audioBarRef.current.style.width = '0%';
+    }, []);
 
     // Reproducir audio con scheduling preciso
     const playAudioChunk = useCallback((base64Data) => {
         if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
             scheduledEndTimeRef.current = audioContextRef.current.currentTime;
+
+            // Setup Output Analysis & Routing
             outputAnalyzerRef.current = audioContextRef.current.createAnalyser();
-            outputAnalyzerRef.current.fftSize = 1024;
-            outputAnalyzerRef.current.smoothingTimeConstant = 0.5;
+            outputAnalyzerRef.current.fftSize = 512; // Even lower for efficiency
+
+            // Setup Destination for Avatar Hook
+            audioDestinationRef.current = audioContextRef.current.createMediaStreamDestination();
+            setOutputStream(audioDestinationRef.current.stream);
+
             outputDataArrayRef.current = new Uint8Array(outputAnalyzerRef.current.frequencyBinCount);
         }
 
@@ -73,7 +80,7 @@ function VisualPage() {
 
             const floatSamples = new Float32Array(samples.length);
             for (let i = 0; i < samples.length; i++) {
-                floatSamples[i] = samples[i] / 32768.0;
+                floatSamples[i] = samples[i] * 0.000030517578125; // 1/32768
             }
 
             const audioBuffer = ctx.createBuffer(1, floatSamples.length, 24000);
@@ -82,12 +89,10 @@ function VisualPage() {
             const source = ctx.createBufferSource();
             source.buffer = audioBuffer;
 
-            if (outputAnalyzerRef.current) {
-                source.connect(outputAnalyzerRef.current);
-                outputAnalyzerRef.current.connect(ctx.destination);
-            } else {
-                source.connect(ctx.destination);
-            }
+            // Route: Source -> Analyzer -> Destination (Avatar Hook) & Speakers
+            source.connect(outputAnalyzerRef.current);
+            outputAnalyzerRef.current.connect(audioDestinationRef.current);
+            outputAnalyzerRef.current.connect(ctx.destination);
 
             const startTime = Math.max(ctx.currentTime, scheduledEndTimeRef.current);
             source.start(startTime);
@@ -110,57 +115,31 @@ function VisualPage() {
         }
     }, []);
 
-    // Analizar audio continuamente mientras reproduce
+    // AGGRESSIVE: Direct DOM Analysis Loop (Bypass React state for level bar)
     useEffect(() => {
-        const interval = setInterval(() => {
+        let frame;
+        const checkLevel = () => {
             const ctx = audioContextRef.current;
             const analyzer = outputAnalyzerRef.current;
+            const bar = audioBarRef.current;
 
-            if (ctx && analyzer && outputDataArrayRef.current) {
+            if (ctx && analyzer && bar && isPlayingRef.current) {
                 analyzer.getByteFrequencyData(outputDataArrayRef.current);
-                const lipSync = analyzeFrequencies(outputDataArrayRef.current, ctx.sampleRate);
-                if (lipSync) {
-                    setLipSyncData(lipSync);
-                    if (lipSync.level > 0.01) {
-                        setAudioLevel(lipSync.level);
-                        return;
-                    }
-                }
+                let sum = 0;
+                const data = outputDataArrayRef.current;
+                for (let i = 0; i < data.length; i++) sum += data[i];
+                const level = (sum / data.length) / 255;
+
+                // Direct DOM update - No re-renders!
+                bar.style.width = `${Math.min(100, level * 200)}%`;
+            } else if (bar && !isPlayingRef.current) {
+                bar.style.width = '0%';
             }
-
-            if (ctx && audioDataRef.current.length > 0) {
-                const currentTime = ctx.currentTime;
-                if (audioDataRef.current.length > 20) {
-                    audioDataRef.current = audioDataRef.current.filter(d => d.startTime + (d.samples.length / 24000) > currentTime - 1);
-                }
-
-                for (const data of audioDataRef.current) {
-                    const duration = data.samples.length / 24000;
-                    if (currentTime >= data.startTime && currentTime < data.startTime + duration) {
-                        const offset = Math.floor((currentTime - data.startTime) * 24000);
-                        const windowSize = Math.min(2400, data.samples.length - offset);
-                        if (windowSize > 0) {
-                            let sum = 0;
-                            for (let i = 0; i < windowSize; i++) {
-                                sum += data.samples[offset + i] * data.samples[offset + i];
-                            }
-                            const rms = Math.sqrt(sum / windowSize);
-                            const level = Math.min(1, rms / 10000);
-                            setAudioLevel(level);
-                        } else {
-                            setAudioLevel(0);
-                        }
-                        return;
-                    }
-                }
-            }
-
-            setAudioLevel(0);
-            setLipSyncData(null);
-        }, 30);
-
-        return () => clearInterval(interval);
-    }, [setAudioLevel, setLipSyncData, analyzeFrequencies]);
+            frame = requestAnimationFrame(checkLevel);
+        };
+        checkLevel();
+        return () => cancelAnimationFrame(frame);
+    }, []);
 
     // Reproducir chunk MP3 (ElevenLabs)
     const playMp3Chunk = useCallback(async (base64Data) => {
@@ -168,8 +147,9 @@ function VisualPage() {
             audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
             scheduledEndTimeRef.current = audioContextRef.current.currentTime;
             outputAnalyzerRef.current = audioContextRef.current.createAnalyser();
-            outputAnalyzerRef.current.fftSize = 1024;
-            outputAnalyzerRef.current.smoothingTimeConstant = 0.5;
+            outputAnalyzerRef.current.fftSize = 512;
+            audioDestinationRef.current = audioContextRef.current.createMediaStreamDestination();
+            setOutputStream(audioDestinationRef.current.stream);
             outputDataArrayRef.current = new Uint8Array(outputAnalyzerRef.current.frequencyBinCount);
         }
 
@@ -187,12 +167,9 @@ function VisualPage() {
             const source = ctx.createBufferSource();
             source.buffer = audioBuffer;
 
-            if (outputAnalyzerRef.current) {
-                source.connect(outputAnalyzerRef.current);
-                outputAnalyzerRef.current.connect(ctx.destination);
-            } else {
-                source.connect(ctx.destination);
-            }
+            source.connect(outputAnalyzerRef.current);
+            outputAnalyzerRef.current.connect(audioDestinationRef.current);
+            outputAnalyzerRef.current.connect(ctx.destination);
 
             const startTime = Math.max(ctx.currentTime, scheduledEndTimeRef.current);
             source.start(startTime);
@@ -233,11 +210,7 @@ function VisualPage() {
             setStatus('Conectando...');
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                const isSecure = window.isSecureContext;
-                const errorMsg = isSecure
-                    ? 'Tu navegador no soporta acceso al micrófono.'
-                    : 'El acceso al micrófono requiere HTTPS.';
-                setStatus('Error: ' + errorMsg);
+                setStatus('Error: Microfono no soportado o requiere HTTPS');
                 return;
             }
 
@@ -256,25 +229,16 @@ function VisualPage() {
             const ws = new WebSocket(wsUrl);
             wsRef.current = ws;
 
-            ws.onopen = () => {
-                setStatus('Esperando conexión con Gemini...');
-            };
+            ws.onopen = () => setStatus('Esperando conexión...');
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-
                 if (data.type === 'connected') {
                     setIsConnected(true);
-                    const mode = data.voiceMode === 'elevenlabs' ? 'ElevenLabs' : 'Nativo';
-                    setStatus(`¡Conectado (${mode})! Habla para interactuar`);
-                } else if (data.type === 'audio') {
-                    audioQueueRef.current.push(data.data);
+                    setStatus(`¡Conectado! Habla para interactuar`);
+                } else if (data.type === 'audio' || data.type === 'elevenlabs_audio') {
+                    audioQueueRef.current.push(data.type === 'audio' ? data.data : { data: data.data, isMp3: true });
                     playAudioQueue();
-                } else if (data.type === 'elevenlabs_audio') {
-                    audioQueueRef.current.push({ data: data.data, isMp3: true });
-                    playAudioQueue();
-                } else if (data.type === 'text') {
-                    console.log('📝 Gemini:', data.text);
                 } else if (data.type === 'whatsapp_notification') {
                     window.open(data.url, '_blank');
                 } else if (data.type === 'interrupted') {
@@ -282,16 +246,8 @@ function VisualPage() {
                 }
             };
 
-            ws.onerror = () => {
-                setStatus('Error de conexión');
-                setIsConnected(false);
-            };
-
-            ws.onclose = () => {
-                setStatus('Desconectado');
-                setIsConnected(false);
-                setIsRecording(false);
-            };
+            ws.onerror = () => { setStatus('Error de conexión'); setIsConnected(false); };
+            ws.onclose = () => { setStatus('Desconectado'); setIsConnected(false); };
 
         } catch (error) {
             console.error('Error:', error);
@@ -301,12 +257,9 @@ function VisualPage() {
 
     // Procesar y enviar audio del micrófono
     const startRecording = useCallback(async () => {
-        if (!mediaStreamRef.current || !wsRef.current) {
-            return;
-        }
+        if (!mediaStreamRef.current || !wsRef.current) return;
 
         isRecordingRef.current = true;
-        setIsRecording(true);
         setStatus('Escuchando...');
 
         const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
@@ -314,59 +267,27 @@ function VisualPage() {
         const processor = audioContext.createScriptProcessor(4096, 1, 1);
         processorRef.current = { audioContext, processor };
 
-        // Buffer de tiempo para evitar eco residual después de que el avatar termina de hablar
         let lastAvatarSpeakTime = 0;
-        const ECHO_BUFFER_MS = 600; // Esperar 600ms después de que el avatar termine
+        const ECHO_BUFFER_MS = 600;
 
         processor.onaudioprocess = (event) => {
             if (!isRecordingRef.current) return;
-
             const inputData = event.inputBuffer.getChannelData(0);
 
-            // === ECHO CANCELLATION MEJORADO ===
-
-            // Calcular volumen del input (mic)
+            // Simple RMS
             let sum = 0;
-            for (let i = 0; i < inputData.length; i++) {
-                sum += inputData[i] * inputData[i];
-            }
+            for (let i = 0; i < inputData.length; i++) sum += inputData[i] * inputData[i];
             const rms = Math.sqrt(sum / inputData.length);
 
-            // Detectar si el avatar está hablando
-            const currentTime = audioContextRef.current?.currentTime || 0;
-            const isAvatarSpeaking = isPlayingRef.current && scheduledEndTimeRef.current > currentTime;
+            const isAvatarSpeaking = isPlayingRef.current;
+            if (isAvatarSpeaking) lastAvatarSpeakTime = Date.now();
 
-            // Si el avatar está hablando, actualizar el timestamp
-            if (isAvatarSpeaking) {
-                lastAvatarSpeakTime = Date.now();
-            }
-
-            // Verificar si estamos en el buffer de eco (avatar terminó recientemente)
             const timeSinceAvatarSpoke = Date.now() - lastAvatarSpeakTime;
             const inEchoBuffer = lastAvatarSpeakTime > 0 && timeSinceAvatarSpoke < ECHO_BUFFER_MS;
 
-            // BLOQUEO TOTAL: Si el avatar está hablando, NO enviar audio (excepto barge-in fuerte)
-            if (isAvatarSpeaking) {
-                // Solo permitir barge-in si el usuario habla MUY fuerte (interrupción intencional)
-                const BARGE_IN_THRESHOLD = 0.15; // Muy alto para evitar eco
-                if (rms < BARGE_IN_THRESHOLD) {
-                    return; // Ignorar - es eco del avatar
-                }
-            }
-
-            // BUFFER DE ECO: Después de que el avatar termina, esperar un poco
-            if (inEchoBuffer) {
-                const RECOVERY_THRESHOLD = 0.08; // Umbral medio durante recuperación
-                if (rms < RECOVERY_THRESHOLD) {
-                    return; // Ignorar - posible eco residual
-                }
-            }
-
-            // Umbral normal cuando no hay eco
-            const NORMAL_THRESHOLD = 0.008;
-            if (rms < NORMAL_THRESHOLD) {
-                return; // Silencio, no enviar
-            }
+            if (isAvatarSpeaking && rms < 0.15) return;
+            if (inEchoBuffer && rms < 0.08) return;
+            if (rms < 0.008) return;
 
             const pcmData = new Int16Array(inputData.length);
             for (let i = 0; i < inputData.length; i++) {
@@ -375,16 +296,10 @@ function VisualPage() {
 
             const uint8Array = new Uint8Array(pcmData.buffer);
             let binary = '';
-            for (let i = 0; i < uint8Array.length; i++) {
-                binary += String.fromCharCode(uint8Array[i]);
-            }
-            const base64 = btoa(binary);
+            for (let i = 0; i < uint8Array.length; i++) binary += String.fromCharCode(uint8Array[i]);
 
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({
-                    type: 'audio',
-                    data: base64
-                }));
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ type: 'audio', data: btoa(binary) }));
             }
         };
 
@@ -392,90 +307,52 @@ function VisualPage() {
         processor.connect(audioContext.destination);
     }, []);
 
-    // Detener grabación
-    const stopRecording = useCallback(() => {
-        isRecordingRef.current = false;
+    // Limpieza
+    const disconnect = useCallback(() => {
+        if (wsRef.current) wsRef.current.close();
+        if (mediaStreamRef.current) mediaStreamRef.current.getTracks().forEach(track => track.stop());
         if (processorRef.current) {
             processorRef.current.processor.disconnect();
             processorRef.current.audioContext.close();
             processorRef.current = null;
         }
-        setIsRecording(false);
+        isRecordingRef.current = false;
+        setIsConnected(false);
     }, []);
 
-    // Desconectar
-    const disconnect = useCallback(() => {
-        if (wsRef.current) {
-            wsRef.current.close();
-        }
-        if (mediaStreamRef.current) {
-            mediaStreamRef.current.getTracks().forEach(track => track.stop());
-        }
-        stopRecording();
-        setIsConnected(false);
-    }, [stopRecording]);
-
-    // Limpiar al desmontar
-    useEffect(() => {
-        return () => {
-            disconnect();
-        };
-    }, [disconnect]);
-
-    // Auto-connect on mount
-    useEffect(() => {
-        connect();
-    }, [connect]);
-
-    // Auto-start recording when connected
-    useEffect(() => {
-        if (isConnected && !isRecording) {
-            startRecording();
-        }
-    }, [isConnected, isRecording, startRecording]);
+    useEffect(() => { disconnect(); connect(); return () => disconnect(); }, [connect, disconnect]);
+    useEffect(() => { if (isConnected) startRecording(); }, [isConnected, startRecording]);
 
     return (
         <div className="app">
-            {/* Escena 3D */}
             <div className="avatar-container">
                 <Canvas
                     camera={{ position: [0, 1, 2.5], fov: 45 }}
                     gl={{
-                        antialias: !isMobile, // Desactivar antialiasing en móvil
-                        powerPreference: isMobile ? 'low-power' : 'high-performance',
-                        pixelRatio: isMobile ? 1 : Math.min(window.devicePixelRatio, 2) // Menor resolución en móvil
+                        antialias: false,
+                        powerPreference: 'low-power',
+                        pixelRatio: 1
                     }}
-                    shadows={!isMobile} // Sin sombras en móvil
-                    dpr={isMobile ? [1, 1] : [1, 2]} // Pixel ratio fijo en móvil
+                    shadows={false}
+                    dpr={1}
                 >
                     <ambientLight intensity={0.6} />
-                    <directionalLight position={[5, 5, 5]} intensity={1} castShadow={!isMobile} />
+                    <directionalLight position={[5, 5, 5]} intensity={1} />
                     <Suspense fallback={null}>
-                        <Avatar3D audioLevel={audioLevel} lipSyncData={lipSyncData} />
-                        <Environment
-                            preset="apartment"
-                            background
-                            resolution={isMobile ? 1024 : 2048}
-                            backgroundBlurriness={0.0}
+                        <Avatar3D
+                            audioStream={outputStream}
+                            modelPath={isMobile ? '/avataralt.glb' : '/avataralt.glb'} // Force light model even on desktop for stability
                         />
+                        <Environment preset="apartment" background resolution={256} />
                     </Suspense>
-                    <OrbitControls
-                        enableZoom={false}
-                        enablePan={false}
-                        minPolarAngle={Math.PI / 3}
-                        maxPolarAngle={Math.PI / 2}
-                    />
+                    <OrbitControls enableZoom={false} enablePan={false} minPolarAngle={Math.PI / 3} maxPolarAngle={Math.PI / 2} />
                 </Canvas>
             </div>
 
-            {/* Controles mínimos */}
             <div className="controls" style={{ minHeight: 'auto', padding: '10px' }}>
                 <div className="status">{status}</div>
                 <div className="audio-level">
-                    <div
-                        className="audio-level-bar"
-                        style={{ width: `${audioLevel * 100}%` }}
-                    />
+                    <div ref={audioBarRef} className="audio-level-bar" style={{ width: '0%' }} />
                 </div>
             </div>
         </div>

@@ -15,7 +15,7 @@ import { detectVowelFromFormants, getMorphsForPhoneme } from '../utils/spanishPh
  */
 export default function useFormantAnalyzer(audioStream, options = {}) {
     const config = {
-        fftSize: 2048, // Higher resolution for formant detection
+        fftSize: 1024, // Optimized from 2048 for better CPU performance
         smoothingTimeConstant: 0.3, // Reduced from 0.6 for faster detection
         minEnergyThreshold: 0.03, // Minimum RMS to trigger detection
         formantSearchRange: {
@@ -94,16 +94,18 @@ export default function useFormantAnalyzer(audioStream, options = {}) {
      * @returns {number} Peak frequency in Hz
      */
     const findPeak = (freqData, sampleRate, minHz, maxHz) => {
-        const binSize = sampleRate / analyserRef.current.fftSize;
+        const binSize = sampleRate / config.fftSize;
         const startBin = Math.floor(minHz / binSize);
         const endBin = Math.floor(maxHz / binSize);
 
-        let maxValue = 0;
+        let maxValue = -1;
         let maxBin = startBin;
 
-        for (let i = startBin; i < endBin && i < freqData.length; i++) {
-            if (freqData[i] > maxValue) {
-                maxValue = freqData[i];
+        const limit = Math.min(endBin, freqData.length);
+        for (let i = startBin; i < limit; i++) {
+            const val = freqData[i];
+            if (val > maxValue) {
+                maxValue = val;
                 maxBin = i;
             }
         }
@@ -118,11 +120,12 @@ export default function useFormantAnalyzer(audioStream, options = {}) {
      */
     const calculateRMS = (timeData) => {
         let sum = 0;
-        for (let i = 0; i < timeData.length; i++) {
-            const normalized = (timeData[i] - 128) / 128;
+        const len = timeData.length;
+        for (let i = 0; i < len; i++) {
+            const normalized = (timeData[i] - 128) * 0.0078125; // 1/128
             sum += normalized * normalized;
         }
-        return Math.sqrt(sum / timeData.length);
+        return Math.sqrt(sum / len);
     };
 
     /**
@@ -132,13 +135,17 @@ export default function useFormantAnalyzer(audioStream, options = {}) {
      */
     const calculateZCR = (timeData) => {
         let crossings = 0;
-        for (let i = 1; i < timeData.length; i++) {
-            if ((timeData[i] >= 128 && timeData[i - 1] < 128) ||
-                (timeData[i] < 128 && timeData[i - 1] >= 128)) {
-                crossings++;
+        const len = timeData.length;
+        for (let i = 1; i < len; i++) {
+            if ((timeData[i] ^ timeData[i - 1]) & 0x80) { // Check if MSB sign bit changed (128 is 10000000)
+                // This is a bitwise trick for Uint8 centered at 128
+                if ((timeData[i] >= 128 && timeData[i - 1] < 128) ||
+                    (timeData[i] < 128 && timeData[i - 1] >= 128)) {
+                    crossings++;
+                }
             }
         }
-        return crossings / timeData.length;
+        return crossings / len;
     };
 
     /**
