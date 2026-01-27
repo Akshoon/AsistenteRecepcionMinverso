@@ -61,95 +61,92 @@ export const SPANISH_CONSONANT_FEATURES = {
 export const PHONEME_TO_MORPH_MAP = {
     // === VOWELS ===
     '/a/': {
-        viseme: 'AH',
+        viseme: 'Ah',
         morphs: {
-            'Ah': 0.55,
-            'Jaw_Open': 0.4,
-            'Mouth_Smile_L': 0.2,
-            'Mouth_Smile_R': 0.2
+            'Ah': 0.8,
+            'Jaw_Open': 0.3,
+            'Mouth_Smile_L': 0.1,
+            'Mouth_Smile_R': 0.1
         },
         description: 'Open central vowel - wide mouth'
     },
 
     '/e/': {
-        viseme: 'EH',
+        viseme: 'EE',
         morphs: {
-            'EE': 0.50,
-            'Jaw_Open': 0.25,
+            'EE': 0.5,
+            'AE': 0.4,
+            'Jaw_Open': 0.2,
             'Mouth_Smile_L': 0.2,
             'Mouth_Smile_R': 0.2
         },
-        description: 'Mid front vowel - spread lips'
+        description: 'Mid front vowel - using EE + AE blend'
     },
 
     '/i/': {
-        viseme: 'IY',
+        viseme: 'EE',
         morphs: {
-            'EE': 0.65,
-            'Jaw_Open': 0.2,
-            'Mouth_Smile_L': 0.25,
-            'Mouth_Smile_R': 0.25
+            'EE': 0.8,
+            'IH': 0.2,
+            'Jaw_Open': 0.1,
+            'Mouth_Smile_L': 0.3,
+            'Mouth_Smile_R': 0.3
         },
         description: 'High front vowel - tense smile'
     },
 
     '/o/': {
-        viseme: 'OH',
+        viseme: 'Oh',
         morphs: {
-            'Oh': 0.55,
-            'W_OO': 0.28,
-            'Jaw_Open': 0.3,
-            'Mouth_Smile_L': 0.1,
-            'Mouth_Smile_R': 0.1
+            'Oh': 0.85,
+            'Jaw_Open': 0.3
         },
         description: 'Mid back vowel - rounded lips'
     },
 
     '/u/': {
-        viseme: 'UW',
+        viseme: 'W_OO',
         morphs: {
-            'W_OO': 0.65,
-            'Mouth_Pucker_Up_L': 0.3,
-            'Mouth_Pucker_Up_R': 0.3,
-            'Jaw_Open': 0.2
+            'W_OO': 0.9,
+            'Jaw_Open': 0.15
         },
         description: 'High back vowel - tight rounded lips'
     },
 
     // === BILABIAL CONSONANTS ===
-    '/p/': { viseme: 'BMP', morphs: { 'B_M_P': 0.7, 'Jaw_Open': 0.0 }, description: 'Voiceless bilabial plosive' },
-    '/b/': { viseme: 'BMP', morphs: { 'B_M_P': 0.7, 'Jaw_Open': 0.03 }, description: 'Voiced bilabial plosive' },
-    '/m/': { viseme: 'BMP', morphs: { 'B_M_P': 0.65, 'Jaw_Open': 0.05 }, description: 'Bilabial nasal' },
+    '/p/': { viseme: 'B_M_P', morphs: { 'B_M_P': 0.8, 'Jaw_Open': 0.05 }, description: 'Voiceless bilabial plosive' },
+    '/b/': { viseme: 'B_M_P', morphs: { 'B_M_P': 0.7, 'Jaw_Open': 0.1 }, description: 'Voiced bilabial plosive' },
+    '/m/': { viseme: 'B_M_P', morphs: { 'B_M_P': 0.6, 'Jaw_Open': 0.1 }, description: 'Bilabial nasal' },
 
     // === LABIODENTAL CONSONANTS ===
-    '/f/': { viseme: 'FV', morphs: { 'F_V': 0.60, 'Jaw_Open': 0.08 }, description: 'Voiceless labiodental fricative' },
-    '/v/': { viseme: 'FV', morphs: { 'F_V': 0.55, 'Jaw_Open': 0.10 }, description: 'Voiced labiodental fricative' },
+    '/f/': { viseme: 'F_V', morphs: { 'F_V': 0.85, 'Jaw_Open': 0.1 }, description: 'Voiceless labiodental fricative' },
+    '/v/': { viseme: 'F_V', morphs: { 'F_V': 0.7, 'Jaw_Open': 0.12 }, description: 'Voiced labiodental fricative' },
 
     // === ALVEOLAR CONSONANTS ===
-    '/s/': { viseme: 'SZ', morphs: { 'S_Z': 0.55, 'Jaw_Open': 0.08, 'EE': 0.15 }, description: 'Voiceless alveolar fricative' },
-    '/z/': { viseme: 'SZ', morphs: { 'S_Z': 0.50, 'Jaw_Open': 0.10, 'EE': 0.12 }, description: 'Voiced alveolar fricative' },
-    '/t/': { viseme: 'TLDN', morphs: { 'T_L_D_N': 0.55, 'Jaw_Open': 0.12 }, description: 'Voiceless alveolar plosive' },
-    '/d/': { viseme: 'TLDN', morphs: { 'T_L_D_N': 0.50, 'Jaw_Open': 0.15 }, description: 'Voiced alveolar plosive' },
-    '/n/': { viseme: 'TLDN', morphs: { 'T_L_D_N': 0.45, 'Jaw_Open': 0.18 }, description: 'Alveolar nasal' },
-    '/l/': { viseme: 'TLDN', morphs: { 'T_L_D_N': 0.42, 'Jaw_Open': 0.15 }, description: 'Alveolar lateral' },
+    '/s/': { viseme: 'S_Z', morphs: { 'S_Z': 0.7, 'Jaw_Open': 0.1, 'EE': 0.2 }, description: 'Voiceless alveolar fricative' },
+    '/z/': { viseme: 'S_Z', morphs: { 'S_Z': 0.6, 'Jaw_Open': 0.12, 'EE': 0.15 }, description: 'Voiced alveolar fricative' },
+    '/t/': { viseme: 'T_L_D_N', morphs: { 'T_L_D_N': 0.6, 'Jaw_Open': 0.15 }, description: 'Voiceless alveolar plosive' },
+    '/d/': { viseme: 'T_L_D_N', morphs: { 'T_L_D_N': 0.5, 'Jaw_Open': 0.15 }, description: 'Voiced alveolar plosive' },
+    '/n/': { viseme: 'T_L_D_N', morphs: { 'T_L_D_N': 0.5, 'Jaw_Open': 0.15 }, description: 'Alveolar nasal' },
+    '/l/': { viseme: 'T_L_D_N', morphs: { 'T_L_D_N': 0.5, 'Jaw_Open': 0.2 }, description: 'Alveolar lateral' },
 
     // === TAPS AND TRILLS ===
-    '/r/': { viseme: 'R', morphs: { 'R': 0.58, 'T_L_D_N': 0.25, 'Jaw_Open': 0.15 }, description: 'Alveolar tap' },
-    '/rr/': { viseme: 'R', morphs: { 'R': 0.65, 'T_L_D_N': 0.30, 'Jaw_Open': 0.18 }, description: 'Alveolar trill' },
+    '/r/': { viseme: 'R', morphs: { 'R': 0.6, 'T_L_D_N': 0.2, 'Jaw_Open': 0.2 }, description: 'Alveolar tap' },
+    '/rr/': { viseme: 'R', morphs: { 'R': 0.8, 'T_L_D_N': 0.3, 'Jaw_Open': 0.2 }, description: 'Alveolar trill' },
 
     // === PALATAL CONSONANTS ===
-    '/tʃ/': { viseme: 'CH', morphs: { 'Ch_J': 0.58, 'Jaw_Open': 0.15, 'W_OO': 0.15 }, description: 'Voiceless postalveolar affricate (ch)' },
-    '/ʝ/': { viseme: 'CH', morphs: { 'Ch_J': 0.50, 'Jaw_Open': 0.18, 'EE': 0.12 }, description: 'Voiced palatal fricative (y)' },
-    '/ɲ/': { viseme: 'TLDN', morphs: { 'T_L_D_N': 0.45, 'Jaw_Open': 0.18, 'EE': 0.12 }, description: 'Palatal nasal (ñ)' },
+    '/tʃ/': { viseme: 'Ch_J', morphs: { 'Ch_J': 0.8, 'Jaw_Open': 0.2 }, description: 'Voiceless postalveolar affricate (ch)' },
+    '/ʝ/': { viseme: 'Ch_J', morphs: { 'Ch_J': 0.6, 'Jaw_Open': 0.2, 'EE': 0.2 }, description: 'Voiced palatal fricative (y)' },
+    '/ɲ/': { viseme: 'T_L_D_N', morphs: { 'T_L_D_N': 0.5, 'Jaw_Open': 0.2, 'EE': 0.2 }, description: 'Palatal nasal (ñ)' },
 
     // === VELAR CONSONANTS ===
-    '/k/': { viseme: 'KG', morphs: { 'K_G_H_NG': 0.50, 'Jaw_Open': 0.15 }, description: 'Voiceless velar plosive' },
-    '/g/': { viseme: 'KG', morphs: { 'K_G_H_NG': 0.45, 'Jaw_Open': 0.18 }, description: 'Voiced velar plosive' },
-    '/x/': { viseme: 'KG', morphs: { 'K_G_H_NG': 0.42, 'Jaw_Open': 0.20 }, description: 'Voiceless velar fricative (j)' },
+    '/k/': { viseme: 'K_G_H_NG', morphs: { 'K_G_H_NG': 0.7, 'Jaw_Open': 0.25 }, description: 'Voiceless velar plosive' },
+    '/g/': { viseme: 'K_G_H_NG', morphs: { 'K_G_H_NG': 0.6, 'Jaw_Open': 0.25 }, description: 'Voiced velar plosive' },
+    '/x/': { viseme: 'K_G_H_NG', morphs: { 'K_G_H_NG': 0.5, 'Jaw_Open': 0.3 }, description: 'Voiceless velar fricative (j)' },
 
     // === SEMIVOWELS ===
-    '/w/': { viseme: 'UW', morphs: { 'W_OO': 0.60, 'Jaw_Open': 0.12 }, description: 'Labio-velar approximant' },
-    '/j/': { viseme: 'IY', morphs: { 'EE': 0.58, 'Jaw_Open': 0.10 }, description: 'Palatal approximant' },
+    '/w/': { viseme: 'W_OO', morphs: { 'W_OO': 0.6, 'Jaw_Open': 0.15 }, description: 'Labio-velar approximant' },
+    '/j/': { viseme: 'EE', morphs: { 'EE': 0.6, 'Jaw_Open': 0.15 }, description: 'Palatal approximant' },
 
     // === SILENCE / REST ===
     'SIL': { viseme: 'SIL', morphs: {}, description: 'Silence - neutral position' }

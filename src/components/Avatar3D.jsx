@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { useGLTF } from '@react-three/drei';
+import { useGLTF, useFBX, useAnimations } from '@react-three/drei';
 import * as THREE from 'three';
 import useGeminiLipSync from '../hooks/useGeminiLipSync';
 
@@ -45,6 +45,13 @@ export default function Avatar3D({
         currentEmotion: emotionState
     });
 
+    // Log Position
+    useEffect(() => {
+        if (group.current) {
+            console.log("📍 Personaje Position:", group.current.position);
+        }
+    }, []);
+
     // === UTILITIES ===
     useEffect(() => {
         if (!scene) return;
@@ -71,20 +78,78 @@ export default function Avatar3D({
         };
     }, [gl]);
 
-    // === IDLE ANIMATION (ARMS/BODY ONLY) ===
-    const bonesRef = useRef({
-        lArm: null, rArm: null, lFore: null, rFore: null
-    });
+    // === IDLE ANIMATION & RETARGETING ===
+    const { animations: idleAnimation } = useGLTF('/animations/IdleGLB.glb');
+    const { actions } = useAnimations(idleAnimation, group);
 
     useEffect(() => {
-        if (!scene) return;
-        bonesRef.current = {
-            lArm: scene.getObjectByName('CC_Base_L_Upperarm'),
-            rArm: scene.getObjectByName('CC_Base_R_Upperarm'),
-            lFore: scene.getObjectByName('CC_Base_L_Forearm'),
-            rFore: scene.getObjectByName('CC_Base_R_Forearm')
-        };
-    }, [scene]);
+        if (!idleAnimation || !idleAnimation[0] || !scene) return;
+
+        const clip = idleAnimation[0];
+
+        // 1. Identify Model Prefix
+        // Find the first bone that looks like a hip to determine the model's naming convention
+        let modelPrefix = "";
+        scene.traverse((obj) => {
+            if (obj.isBone && !modelPrefix) {
+                if (obj.name.includes("mixamorig")) {
+                    modelPrefix = "mixamorig";
+                } else if (obj.name.includes("mixamorig:")) {
+                    modelPrefix = "mixamorig:";
+                }
+            }
+        });
+
+        // 2. Retarget Tracks
+        clip.tracks.forEach((track) => {
+            // THREE.js track names are "BoneName.property"
+            // We need to fix the BoneName part
+            let [trackBone, trackProp] = track.name.split('.');
+
+            // Clean track bone name (remove mixamorig prefix from animation if present)
+            let cleanBoneName = trackBone.replace(/mixamorig:?/i, "");
+
+            // Re-apply correct prefix for the model
+            let finalBoneName = modelPrefix ? `${modelPrefix}:${cleanBoneName}` : cleanBoneName;
+
+            // Special case: "Hips" often needs exact matching
+            if (cleanBoneName.toLowerCase() === "hips") {
+                // Try to find the actual hips bone in scene to be sure
+                // (Simpler: just use the constructed name)
+            }
+
+            // Update track name
+            // Note: In some THREE versions track.name is read-only, but usually it's editable.
+            // If strictly read-only, we'd need to clone the track. For now, try direct mutation.
+            track.name = `${finalBoneName}.${trackProp}`;
+        });
+
+        // 3. Filter Tracks (Hips, Neck, Head, Eyes, Jaw)
+        // We filter AFTER renaming so we look for the *corrected* names
+        clip.tracks = clip.tracks.filter((track) => {
+            const trackName = track.name.toLowerCase();
+
+            // Filter out Hips to keep avatar upright
+            if (trackName.includes("hips")) return false;
+
+            // Filter out Neck/Head to keep head stable for lip-sync/lookAt
+            if (trackName.includes("neck") || trackName.includes("head")) return false;
+
+            // Filter out Eyes to prevent "cross-eyed" or wandering eyes from animation
+            if (trackName.includes("eye")) return false;
+
+            // Filter out Jaw to prevent conflict with LipSync
+            if (trackName.includes("jaw") || trackName.includes("teeth") || trackName.includes("tongue")) return false;
+
+            return true;
+        });
+
+        // Reset and play
+        if (actions && actions[clip.name]) {
+            actions[clip.name].reset().fadeIn(0.5).play();
+        }
+
+    }, [idleAnimation, scene, actions]);
 
     // FPS Capping for Mobile (30 FPS)
     const frameTimeRef = useRef(0);
@@ -96,17 +161,10 @@ export default function Avatar3D({
             if (frameTimeRef.current < 1 / 30) return;
             frameTimeRef.current = 0;
         }
-
-        const { lArm, rArm, lFore, rFore } = bonesRef.current;
-
-        if (lArm) { lArm.rotation.z = -1.4; lArm.rotation.x = 0; lArm.rotation.y = 0; }
-        if (rArm) { rArm.rotation.z = 1.4; rArm.rotation.x = 0; rArm.rotation.y = 0; }
-        if (lFore) { lFore.rotation.z = 0.1; lFore.rotation.x = 0.2; }
-        if (rFore) { rFore.rotation.z = -0.1; rFore.rotation.x = 0.2; }
     });
 
     return (
-        <group ref={group} position={[0, -5, 0]} scale={3}>
+        <group ref={group} position={[0, -4.5, 0]} scale={3}>
             <primitive object={scene} />
         </group>
     );

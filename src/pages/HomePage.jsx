@@ -16,6 +16,7 @@ function HomePage() {
   const [isConnected, setIsConnected] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [status, setStatus] = useState('Desconectado');
+  const [isAvatarSpeaking, setIsAvatarSpeaking] = useState(false);
 
   // WhatsApp state
   const [whatsappStatus, setWhatsappStatus] = useState(null);
@@ -255,6 +256,7 @@ function HomePage() {
     setAudioLevel(0);
     setLipSyncData(null);
     isPlayingRef.current = false;
+    setIsAvatarSpeaking(false);
 
     console.log('🔇 Reproducción interrumpida y cola limpiada');
   }, [setAudioLevel, setLipSyncData]);
@@ -316,10 +318,14 @@ function HomePage() {
 
       currentSourceRef.current = source;
       isPlayingRef.current = true;
+      setIsAvatarSpeaking(true);
 
       source.onended = () => {
         if (currentSourceRef.current === source) currentSourceRef.current = null;
-        if (ctx.currentTime >= scheduledEndTimeRef.current - 0.05) isPlayingRef.current = false;
+        if (ctx.currentTime >= scheduledEndTimeRef.current - 0.05) {
+          isPlayingRef.current = false;
+          setIsAvatarSpeaking(false);
+        }
       };
 
     } catch (error) {
@@ -356,10 +362,14 @@ function HomePage() {
 
       currentSourceRef.current = source;
       isPlayingRef.current = true;
+      setIsAvatarSpeaking(true);
 
       source.onended = () => {
         if (currentSourceRef.current === source) currentSourceRef.current = null;
-        if (ctx.currentTime >= scheduledEndTimeRef.current - 0.05) isPlayingRef.current = false;
+        if (ctx.currentTime >= scheduledEndTimeRef.current - 0.05) {
+          isPlayingRef.current = false;
+          setIsAvatarSpeaking(false);
+        }
       };
 
     } catch (error) {
@@ -912,7 +922,7 @@ function HomePage() {
           <Canvas
             shadows={false}
             dpr={[1, 1.5]}
-            camera={{ position: [0, 1, 2.5], fov: 45 }}
+            camera={{ position: [0, 0.5, 5], fov: 40, near: 0.01 }}
             gl={{
               antialias: true,
               preserveDrawingBuffer: true,
@@ -931,6 +941,7 @@ function HomePage() {
               <Avatar3D
                 audioStream={geminiStream}
                 audioLevel={audioLevel}
+                isTalking={isAvatarSpeaking}
                 lipSyncData={lipSyncState}
                 emotionState={status.includes('Escuchando') ? 'neutral' : 'happy'}
               />

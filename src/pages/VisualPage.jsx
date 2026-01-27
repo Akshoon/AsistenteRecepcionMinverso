@@ -327,7 +327,7 @@ function VisualPage() {
         <div className="app">
             <div className="avatar-container">
                 <Canvas
-                    camera={{ position: [0, 1, 2.5], fov: 45 }}
+                    camera={{ position: [0, 1, 2.5], fov: 45, near: 0.01 }}
                     gl={{
                         antialias: false,
                         powerPreference: 'low-power',

@@ -59,8 +59,10 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
         EE: 'EE',
         IH: 'IH',
         SZ: 'S_Z',
+        BMP: 'B_M_P',
         FV: 'F_V',
         TLDN: 'T_L_D_N',
+        KGHNG: 'K_G_H_NG',
         SMILE_L: 'Mouth_Smile_L', SMILE_R: 'Mouth_Smile_R',
         FROWN_L: 'Mouth_Frown_L', FROWN_R: 'Mouth_Frown_R',
         BLINK_L: 'Eye_Blink_L', BLINK_R: 'Eye_Blink_R',
@@ -72,7 +74,7 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
         currentValues: {
             Jaw_Open: 0,
             Ah: 0, Oh: 0, W_OO: 0, EE: 0, IH: 0,
-            S_Z: 0, F_V: 0, T_L_D_N: 0
+            S_Z: 0, B_M_P: 0, F_V: 0, T_L_D_N: 0, K_G_H_NG: 0
         },
         currentEmotions: {},
         breathTimer: 0,
@@ -98,7 +100,7 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
             if (!mesh.morphTargetInfluences) return;
             mesh.morphTargetInfluences.fill(0);
         });
-        state.current.currentValues = { Jaw_Open: 0, Ah: 0, Oh: 0, W_OO: 0, EE: 0, IH: 0, S_Z: 0, F_V: 0, T_L_D_N: 0 };
+        state.current.currentValues = { Jaw_Open: 0, Ah: 0, Oh: 0, W_OO: 0, EE: 0, IH: 0, S_Z: 0, B_M_P: 0, F_V: 0, T_L_D_N: 0, K_G_H_NG: 0 };
         state.current.currentEmotions = {};
     };
 
@@ -292,7 +294,7 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
                 const blendedTargets = {};
 
                 // AGGRESSIVE: Use pre-defined array for managed morphs instead of creating Set/Keys every frame
-                const managedMorphs = ['Jaw_Open', 'Ah', 'Oh', 'W_OO', 'EE', 'IH', 'S_Z', 'F_V', 'T_L_D_N'];
+                const managedMorphs = ['Jaw_Open', 'Ah', 'Oh', 'W_OO', 'EE', 'IH', 'S_Z', 'B_M_P', 'F_V', 'T_L_D_N', 'K_G_H_NG'];
 
                 // Promediar cada morph con pesos
                 for (let i = 0; i < managedMorphs.length; i++) {
@@ -365,16 +367,16 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
             state.current.currentValues.Jaw_Open = targetJaw;
 
             // 2. Vocales (Multiplicadores ajustados a mitad de boost)
-            const targetAh = (low / total) * rms * 1.0;
-            const targetOh = (low / total) * rms * 0.6;
-            const targetWoo = (low / total) * rms * 0.5;
+            const targetAH = (low / total) * rms * 1.0;
+            const targetOH = (low / total) * rms * 0.6;
+            const targetWOO = (low / total) * rms * 0.5;
             const targetEE = (mid / total) * rms * 0.9;
             const targetIH = (mid / total) * rms * 0.6;
 
             // 3. Consonantes (ZCR Driven) - Reduced sensititivy (2.5)
             const c = Math.max(0, Math.min(1, zcr * 2.5));
             const targetSZ = c * 0.25;
-            const targetFV = c * 0.2;
+            const targetFV = c * 0.2; // Dental Lip ~ F/V
             const targetTLDN = c * 0.2;
 
             // Build TARGETS for fallback mode
@@ -383,14 +385,15 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
 
             TARGETS = {
                 [MORPHS.JAW]: currentJaw,
-                [MORPHS.AH]: THREE.MathUtils.lerp(state.current.currentValues.Ah, targetAh, 0.1),
-                [MORPHS.OH]: THREE.MathUtils.lerp(state.current.currentValues.Oh, targetOh, 0.1),
-                [MORPHS.WOO]: THREE.MathUtils.lerp(state.current.currentValues.W_OO, targetWoo, 0.1),
+                [MORPHS.AH]: THREE.MathUtils.lerp(state.current.currentValues.Ah, targetAH, 0.1),
+                [MORPHS.OH]: THREE.MathUtils.lerp(state.current.currentValues.Oh, targetOH, 0.1),
+                [MORPHS.WOO]: THREE.MathUtils.lerp(state.current.currentValues.W_OO, targetWOO, 0.1),
                 [MORPHS.EE]: THREE.MathUtils.lerp(state.current.currentValues.EE, targetEE, 0.1),
                 [MORPHS.IH]: THREE.MathUtils.lerp(state.current.currentValues.IH, targetIH, 0.1),
                 [MORPHS.SZ]: THREE.MathUtils.lerp(state.current.currentValues.S_Z, targetSZ, 0.1),
                 [MORPHS.FV]: THREE.MathUtils.lerp(state.current.currentValues.F_V, targetFV, 0.1),
                 [MORPHS.TLDN]: THREE.MathUtils.lerp(state.current.currentValues.T_L_D_N, targetTLDN, 0.1)
+                // BMP and KGHNG ignored in fallback
             };
         }
 
@@ -450,7 +453,8 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
             Jaw_Open: TARGETS[MORPHS.JAW],
             Ah: TARGETS[MORPHS.AH], Oh: TARGETS[MORPHS.OH], W_OO: TARGETS[MORPHS.WOO],
             EE: TARGETS[MORPHS.EE], IH: TARGETS[MORPHS.IH],
-            S_Z: TARGETS[MORPHS.SZ], F_V: TARGETS[MORPHS.FV], T_L_D_N: TARGETS[MORPHS.TLDN]
+            S_Z: TARGETS[MORPHS.SZ], F_V: TARGETS[MORPHS.FV], T_L_D_N: TARGETS[MORPHS.TLDN],
+            B_M_P: TARGETS[MORPHS.BMP], K_G_H_NG: TARGETS[MORPHS.KGHNG]
         };
 
         // Emociones (Aditivas)
@@ -465,7 +469,7 @@ export default function useGeminiLipSync({ scene, audioStream, currentEmotion = 
 
         // Aplicar usando el cache de índices
         const stateEmotions = state.current.currentEmotions;
-        const managedMorphs = ['Jaw_Open', 'Ah', 'Oh', 'W_OO', 'EE', 'IH', 'S_Z', 'F_V', 'T_L_D_N'];
+        const managedMorphs = ['Jaw_Open', 'Ah', 'Oh', 'W_OO', 'EE', 'IH', 'S_Z', 'B_M_P', 'F_V', 'T_L_D_N', 'K_G_H_NG'];
         const emotionKeys = ['Mouth_Smile_L', 'Mouth_Smile_R', 'Cheek_Raise_L', 'Cheek_Raise_R', 'Mouth_Frown_L', 'Mouth_Frown_R', 'Brow_Drop_L', 'Brow_Drop_R', 'Brow_Compress_L', 'Brow_Compress_R', 'Mouth_Tighten_L', 'Mouth_Tighten_R', 'Eye_Wide_L', 'Eye_Wide_R', 'Brow_Raise_Inner_L', 'Brow_Raise_Inner_R'];
 
         meshRefs.current.indexCache.forEach(({ mesh, indices }) => {
