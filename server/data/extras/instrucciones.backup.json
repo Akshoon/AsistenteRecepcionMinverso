@@ -107,7 +107,7 @@
                 "response": "Lámpara 3 apagada."
             },
             {
-                "id": "grupo_la_sala_del_show_on",
+                "id": "grupo_sala_de_estar_on",
                 "triggers": [
                     "prende La sala del show",
                     "enciende La sala del show",
@@ -115,7 +115,7 @@
                 ],
                 "tool": "visit_url",
                 "args": {
-                    "url": "",
+                    "url": "group:sala_de_estar_on",
                     "urls": []
                 },
                 "response": "La sala del show encendido.",
@@ -126,14 +126,14 @@
                 ]
             },
             {
-                "id": "grupo_la_sala_del_show_off",
+                "id": "grupo_sala_de_estar_off",
                 "triggers": [
                     "apaga La sala del show",
                     "desactiva La sala del show"
                 ],
                 "tool": "visit_url",
                 "args": {
-                    "url": "",
+                    "url": "group:sala_de_estar_off",
                     "urls": []
                 },
                 "response": "La sala del show apagado.",

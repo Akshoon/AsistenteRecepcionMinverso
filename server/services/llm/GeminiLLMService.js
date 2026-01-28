@@ -22,7 +22,7 @@ import { tools } from '../../tools.js';
 // Constantes de configuración
 const MAX_TOOL_ITERATIONS = 5;
 const RETRY_ATTEMPTS = 3;
-const INITIAL_RETRY_DELAY = 300;
+const INITIAL_RETRY_DELAY = 1000;
 
 export class GeminiLLMService extends BaseLLM {
     constructor(config) {
@@ -102,12 +102,16 @@ export class GeminiLLMService extends BaseLLM {
             try {
                 return await fn();
             } catch (error) {
-                const is503 = error.status === 503 ||
+                const isRetryable =
+                    error.status === 503 ||
+                    error.status === 429 ||
                     error.message?.includes('503') ||
-                    error.message?.includes('overloaded');
+                    error.message?.includes('429') ||
+                    error.message?.includes('overloaded') ||
+                    error.message?.includes('Quota exceeded');
 
-                if (is503 && attempt < RETRY_ATTEMPTS - 1) {
-                    console.warn(`GeminiLLMService: 503 en ${context}, retry ${attempt + 1}/${RETRY_ATTEMPTS} en ${delay}ms`);
+                if (isRetryable && attempt < RETRY_ATTEMPTS - 1) {
+                    console.warn(`GeminiLLMService: Error retryable (${error.status || 'unknown'}) en ${context}, retry ${attempt + 1}/${RETRY_ATTEMPTS} en ${delay}ms`);
                     await new Promise(r => setTimeout(r, delay));
                     delay *= 2; // Backoff exponencial
                 } else {
@@ -207,5 +211,24 @@ export class GeminiLLMService extends BaseLLM {
         return {
             text: responseText
         };
+    }
+
+    /**
+     * Genera contenido directamente (One-shot) sin historial de chat
+     * @param {string} prompt - Prompt para el modelo
+     * @returns {Promise<string>} - Texto generado
+     */
+    async generateContent(prompt) {
+        if (!this.model) throw new Error("Modelo no inicializado");
+
+        console.log('GeminiLLMService: Generando contenido one-shot...');
+
+        const result = await this._withRetry(
+            () => this.model.generateContent(prompt),
+            'generateContent'
+        );
+
+        const response = await result.response;
+        return this._safeGetText(response);
     }
 }

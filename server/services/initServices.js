@@ -36,7 +36,7 @@ const __dirname = dirname(__filename);
  */
 function loadIntegrationsConfig() {
     try {
-        const configPath = join(__dirname, '../data/extras/integrations_config.json');
+        const configPath = join(__dirname, '../data/integrations.json');
         if (fs.existsSync(configPath)) {
             return JSON.parse(fs.readFileSync(configPath, 'utf-8'));
         }
@@ -57,88 +57,69 @@ export async function initializeServices(externalServices = {}) {
 
     // === SERVICIOS FUNCIONALES ===
 
-    // IoT Control (luces, showroom) - ACTIVO
-    if (config.iot_lights?.enabled !== false) {
+    // IoT Control (luces, showroom)
+    if (config.IoT?.enabled !== false) {
         const iotService = new IoTControlService({ enabled: true });
         serviceRegistry.register('iot', iotService);
     }
 
-    // Data Collection - ACTIVO (en memoria)
-    if (config.data_collection?.enabled !== false) {
+    // Data Collection
+    if (config.Data?.enabled !== false) {
         const dataService = new DataCollectionService({ enabled: true });
         serviceRegistry.register('data', dataService);
     }
 
-    // === SERVICIOS PLACEHOLDER (para futuro) ===
+    // === SERVICIOS PLACEHOLDER ===
 
     // Calendar
-    if (config.calendar?.enabled) {
+    if (config.Calendar?.enabled) {
         const calendarService = new CalendarService({
             enabled: true,
-            calendarType: config.calendar.type,
-            credentials: config.calendar.credentials_path
+            // Assuming default params if new config doesn't have detailed settings yet
+            calendarType: 'google',
+            credentials: 'credentials.json'
         });
         serviceRegistry.register('calendar', calendarService);
     }
 
     // Media Display
-    if (config.media_display?.enabled) {
-        const mediaService = new MediaDisplayService({
-            enabled: true,
-            mediaPath: config.media_display.media_path
-        });
+    if (config.Media?.enabled) {
+        const mediaService = new MediaDisplayService({ enabled: true });
         serviceRegistry.register('media', mediaService);
     }
 
-    // Web Display
-    if (config.web_display?.enabled) {
-        const webService = new WebDisplayService({
-            enabled: true,
-            allowedDomains: config.web_display.allowed_domains
-        });
-        serviceRegistry.register('web', webService);
-    }
-
     // Avatar Movements
-    if (config.avatar_movements?.enabled) {
+    if (config.Avatar?.enabled) {
         const avatarService = new AvatarMovementService({ enabled: true });
         serviceRegistry.register('avatar', avatarService);
     }
 
     // Person Recognition
-    if (config.person_recognition?.enabled) {
+    if (config.Recognition?.enabled) {
         const recognitionService = new PersonRecognitionService({ enabled: true });
         serviceRegistry.register('recognition', recognitionService);
     }
 
-    // WhatsApp Calls
-    if (config.whatsapp_calls?.enabled) {
+    // WhatsApp Calls (linked to general WhatsApp toggle)
+    if (config.WhatsApp?.enabled) {
         const callService = new WhatsAppCallService({ enabled: true });
         serviceRegistry.register('whatsappCalls', callService);
     }
 
-    // IoT Sensors
-    if (config.iot_sensors?.doors?.enabled) {
+    // IoT Sensors (All under IoT toggle for now)
+    if (config.IoT?.enabled) {
         const doorService = new DoorControlService({ enabled: true });
         serviceRegistry.register('doors', doorService);
-    }
 
-    if (config.iot_sensors?.music?.enabled) {
         const musicService = new MusicService({ enabled: true });
         serviceRegistry.register('music', musicService);
-    }
 
-    if (config.iot_sensors?.cameras?.enabled) {
         const cameraService = new CameraService({ enabled: true });
         serviceRegistry.register('cameras', cameraService);
-    }
 
-    if (config.iot_sensors?.elevator?.enabled) {
         const elevatorService = new ElevatorSensorService({ enabled: true });
         serviceRegistry.register('elevator', elevatorService);
-    }
 
-    if (config.iot_sensors?.home_sensors?.enabled) {
         const homeService = new HomeSensorService({ enabled: true });
         serviceRegistry.register('homeSensors', homeService);
     }

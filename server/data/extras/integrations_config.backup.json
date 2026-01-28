@@ -125,5 +125,9 @@
     },
     "whatsapp": {
         "enabled": false
+    },
+    "camera": {
+        "enabled": false,
+        "connection_type": "USB"
     }
 }

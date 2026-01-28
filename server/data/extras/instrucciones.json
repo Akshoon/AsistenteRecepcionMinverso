@@ -4,31 +4,6 @@
         "instructions": "Cuando el usuario pida encender, apagar o controlar cualquier dispositivo (luces, lámparas, showroom, etc), busca el comando correspondiente en la lista de 'commands' y usa la herramienta visit_url con la URL indicada. Responde confirmando la acción realizada de forma breve.",
         "commands": [
             {
-                "id": "showroom_on",
-                "triggers": [
-                    "prende el showroom",
-                    "enciende el showroom",
-                    "activa el showroom"
-                ],
-                "tool": "visit_url",
-                "args": {
-                    "url": "https://iot.xplorar.cl/shelly/lampara.php?action=on"
-                },
-                "response": "Showroom encendido."
-            },
-            {
-                "id": "showroom_off",
-                "triggers": [
-                    "apaga el showroom",
-                    "desactiva el showroom"
-                ],
-                "tool": "visit_url",
-                "args": {
-                    "url": "https://iot.xplorar.cl/shelly/lampara.php?action=off"
-                },
-                "response": "Showroom apagado."
-            },
-            {
                 "id": "lampara_1_on",
                 "triggers": [
                     "prende la lámpara 1",
@@ -123,6 +98,11 @@
                 "groupDevices": [
                     "showroom",
                     "lampara_2"
+                ],
+                "deviceIds": [
+                    "showroom",
+                    "lampara_2",
+                    "lampara_1"
                 ]
             },
             {
@@ -141,6 +121,11 @@
                 "groupDevices": [
                     "showroom",
                     "lampara_2"
+                ],
+                "deviceIds": [
+                    "showroom",
+                    "lampara_2",
+                    "lampara_1"
                 ]
             }
         ]

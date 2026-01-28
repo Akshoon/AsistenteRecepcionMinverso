@@ -7,6 +7,7 @@ import { dirname, join } from 'path';
 import fs from 'fs';
 
 import { LLMFactory } from './services/llm/LLMFactory.js';
+import { GeminiLLMService } from './services/llm/GeminiLLMService.js';
 import { ElevenLabsTTS } from './services/tts/ElevenLabsTTS.js';
 import { WhatsAppService } from './services/whatsapp/WhatsAppService.js';
 import { createToolHandler } from './tools.js';
@@ -141,13 +142,28 @@ Si te piden realizar una acción específica (como notificar o controlar disposi
 `;
 }
 
+function loadIntegrationsConfig() {
+    try {
+        const integrationsPath = join(__dirname, 'data/integrations.json');
+        if (fs.existsSync(integrationsPath)) {
+            const data = fs.readFileSync(integrationsPath, 'utf-8');
+            return JSON.parse(data);
+        }
+    } catch (error) {
+        console.warn('Error cargando integrations.json:', error.message);
+    }
+    return {};
+}
+
 // --- Inicializar Servicios ---
 
 // TTS Service
 const ttsService = new ElevenLabsTTS();
 
 // WhatsApp Service
-const whatsappEnabled = process.env.WHATSAPP_ENABLED !== 'false';
+const integrationsConfig = loadIntegrationsConfig();
+const whatsappEnabled = integrationsConfig.WhatsApp?.enabled !== false && process.env.WHATSAPP_ENABLED !== 'false';
+
 const whatsappService = whatsappEnabled ? new WhatsAppService({
     headless: process.env.WHATSAPP_HEADLESS !== 'false',
     sessionPath: process.env.WHATSAPP_SESSION_PATH || join(__dirname, 'data/whatsapp-session')
@@ -311,6 +327,52 @@ app.get('/api/config/phones', (req, res) => {
     }
 });
 
+// Get integrations configuration
+app.get('/api/config/integrations', (req, res) => {
+    try {
+        const integrationsPath = join(__dirname, 'data/integrations.json');
+        if (!fs.existsSync(integrationsPath)) {
+            // Return default structure if file doesn't exist
+            return res.json({
+                Avatar: { enabled: false },
+                Base: { enabled: false },
+                Calendar: { enabled: false },
+                Data: { enabled: false },
+                IoT: { enabled: false },
+                LLM: { enabled: false },
+                Media: { enabled: false },
+                Recognition: { enabled: false },
+                TTS: { enabled: false },
+                WhatsApp: { enabled: false }
+            });
+        }
+
+        const data = fs.readFileSync(integrationsPath, 'utf-8');
+        res.json(JSON.parse(data));
+    } catch (error) {
+        console.error('Error reading integrations:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Save integrations configuration
+app.post('/api/config/integrations', (req, res) => {
+    try {
+        const integrationsPath = join(__dirname, 'data/integrations.json');
+        const newConfig = req.body;
+
+        if (!newConfig || typeof newConfig !== 'object') {
+            return res.status(400).json({ error: 'Invalid configuration format' });
+        }
+
+        fs.writeFileSync(integrationsPath, JSON.stringify(newConfig, null, 4), 'utf-8');
+        res.json({ success: true, message: 'Integrations saved successfully' });
+    } catch (error) {
+        console.error('Error saving integrations:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Save phone numbers
 app.post('/api/config/phones', (req, res) => {
     try {
@@ -400,9 +462,10 @@ app.post('/api/iot/action', async (req, res) => {
             res.json({ success: response.ok, status: response.status });
         }
     } catch (error) {
-        console.error('[IoT Proxy] Error:', error.message);
+        console.error(`[IoT Proxy] Error executing action on ${url}:`, error.message);
+        console.error(`[IoT Proxy] Full error:`, error);
         // Si falla la conexión, retornar error pero 200 en http para que el frontend lo maneje
-        res.json({ success: false, error: error.message });
+        res.json({ success: false, error: error.message, status: 'connection_error' });
     }
 });
 
@@ -536,6 +599,97 @@ app.delete('/api/config/documents/:filename', (req, res) => {
         res.json({ success: true, message: 'Document deleted' });
     } catch (error) {
         console.error('Error deleting document:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Analyze documents for duplicates
+app.post('/api/config/documents/analyze', async (req, res) => {
+    try {
+        console.log('Analyzing documents for duplicates...');
+        const documentsPath = join(__dirname, 'data/documentos');
+
+        if (!fs.existsSync(documentsPath)) {
+            return res.json({ result: 'No hay documentos para analizar.' });
+        }
+
+        const files = fs.readdirSync(documentsPath).filter(f => f.endsWith('.txt'));
+        if (files.length === 0) {
+            return res.json({ result: 'No hay documentos de texto (.txt) para analizar.' });
+        }
+
+        let combinedContent = "";
+        for (const file of files) {
+            const content = fs.readFileSync(join(documentsPath, file), 'utf-8');
+            combinedContent += `\n--- DOCUMENTO: ${file} ---\n${content}\n`;
+        }
+
+        const llm = new GeminiLLMService({ apiKey: process.env.GOOGLE_API_KEY });
+        await llm.initialize();
+
+        const prompt = `Analiza los siguientes documentos de contexto de un asistente virtual y busca información duplicada, contradictoria o redundante.
+        
+        DOCUMENTOS:
+        ${combinedContent}
+
+        INSTRUCCIONES:
+        1. Lista los temas que aparecen duplicados o repetidos.
+        2. Identifica contradicciones explícitas (ej: dos horarios diferentes).
+        3. Si todo parece correcto y sin redundancias graves, indícalo.
+        4. Sé conciso y usa formato Markdown.
+        `;
+
+        const analysis = await llm.generateContent(prompt);
+        res.json({ result: analysis });
+
+    } catch (error) {
+        console.error('Error analyzing documents:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Summarize documents for AI context
+app.post('/api/config/documents/summarize', async (req, res) => {
+    try {
+        console.log('Summarizing documents...');
+        const documentsPath = join(__dirname, 'data/documentos');
+
+        if (!fs.existsSync(documentsPath)) {
+            return res.json({ result: 'No hay documentos para resumir.' });
+        }
+
+        const files = fs.readdirSync(documentsPath).filter(f => f.endsWith('.txt'));
+        if (files.length === 0) {
+            return res.json({ result: 'No hay documentos de texto (.txt) para resumir.' });
+        }
+
+        let combinedContent = "";
+        for (const file of files) {
+            const content = fs.readFileSync(join(documentsPath, file), 'utf-8');
+            combinedContent += `\n--- DOCUMENTO: ${file} ---\n${content}\n`;
+        }
+
+        const llm = new GeminiLLMService({ apiKey: process.env.GOOGLE_API_KEY });
+        await llm.initialize();
+
+        const prompt = `Actúa como un arquitecto de conocimiento experto. Tu tarea es leer todos los documentos de contexto proporcionados y generar un RESUMEN CONSOLIDADO Y ESTRUCTURADO que sirva como "Memoria Base" para un asistente de IA.
+
+        DOCUMENTOS:
+        ${combinedContent}
+
+        INSTRUCCIONES:
+        1. Ignora saludos, redundancias o texto de relleno.
+        2. Extrae todos los HECHOS, REGLAS, HORARIOS, PRECIOS y PROCEDIMIENTOS CLAVE.
+        3. Organiza la información por temas (ej: "Sobre Nosotros", "Servicios", "Políticas").
+        4. El formato debe ser texto plano o Markdown limpio, optimizado para que una IA lo ingiera como contexto del sistema.
+        5. Sé exhaustivo pero conciso. No inventes información.
+        `;
+
+        const summary = await llm.generateContent(prompt);
+        res.json({ result: summary });
+
+    } catch (error) {
+        console.error('Error summarizing documents:', error);
         res.status(500).json({ error: error.message });
     }
 });

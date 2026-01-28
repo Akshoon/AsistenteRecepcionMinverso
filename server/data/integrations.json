@@ -1,0 +1,32 @@
+{
+    "Avatar": {
+        "enabled": true
+    },
+    "Base": {
+        "enabled": true
+    },
+    "Calendar": {
+        "enabled": false
+    },
+    "Data": {
+        "enabled": true
+    },
+    "IoT": {
+        "enabled": true
+    },
+    "LLM": {
+        "enabled": true
+    },
+    "Media": {
+        "enabled": false
+    },
+    "Recognition": {
+        "enabled": false
+    },
+    "TTS": {
+        "enabled": true
+    },
+    "WhatsApp": {
+        "enabled": true
+    }
+}

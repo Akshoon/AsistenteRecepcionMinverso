@@ -25,6 +25,10 @@ function ConfigPage() {
     const [availableSerialPorts, setAvailableSerialPorts] = useState([]);
     const [availableCameras, setAvailableCameras] = useState([]);
 
+    // AI Analysis State
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisResult, setAnalysisResult] = useState(null);
+
     useEffect(() => {
         loadAllData();
     }, []);
@@ -97,7 +101,21 @@ function ConfigPage() {
 
     const handleEditDocument = async (doc) => {
         setEditingDoc(doc.name);
-        setEditContent(doc.content || '');
+        setEditContent('Cargando contenido...');
+
+        try {
+            const res = await fetch(`/api/config/documents/${doc.name}`);
+            if (res.ok) {
+                const data = await res.json();
+                setEditContent(data.content || '');
+            } else {
+                setEditContent('Error cargando contenido.');
+                setError('No se pudo cargar el contenido del documento');
+            }
+        } catch (err) {
+            setEditContent('Error de conexión.');
+            setError(err.message);
+        }
     };
 
     const handleSaveDocument = async () => {
@@ -158,6 +176,48 @@ function ConfigPage() {
         }
     };
 
+    const handleAnalyzeDocuments = async () => {
+        setIsAnalyzing(true);
+        setAnalysisResult(null);
+        setError(null);
+
+        try {
+            const res = await fetch('/api/config/documents/analyze', { method: 'POST' });
+            const data = await res.json();
+
+            if (res.ok) {
+                setAnalysisResult(data.result);
+            } else {
+                setError(data.error || 'Error analizando documentos');
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    const handleSummarizeDocuments = async () => {
+        setIsAnalyzing(true);
+        setAnalysisResult(null);
+        setError(null);
+
+        try {
+            const res = await fetch('/api/config/documents/summarize', { method: 'POST' });
+            const data = await res.json();
+
+            if (res.ok) {
+                setAnalysisResult(data.result);
+            } else {
+                setError(data.error || 'Error resumiendo documentos');
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
     // IoT functions (from original)
     const getIotDevices = () => {
         if (!config?.comandos?.commands) return [];
@@ -198,19 +258,29 @@ function ConfigPage() {
 
     const executeIoTAction = async (url) => {
         try {
-            await fetch('/api/iot/action', {
+            const res = await fetch('/api/iot/action', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url })
             });
-            setSuccessMessage('Accion ejecutada');
-            setTimeout(() => setSuccessMessage(''), 2000);
+
+            const data = await res.json();
+
+            if (data.success) {
+                setSuccessMessage('Accion ejecutada correctamente');
+                setTimeout(() => setSuccessMessage(''), 2000);
+            } else {
+                throw new Error(data.error || 'Error desconocido del servidor');
+            }
         } catch (err) {
+            console.warn('Proxy falló, intentando acceso directo...', err);
             try {
-                await fetch(url);
-                setSuccessMessage('Accion ejecutada');
+                // Intento directo desde el navegador (puede fallar por CORS/Mixed Content)
+                await fetch(url, { mode: 'no-cors' });
+                setSuccessMessage('Accion ejecutada (Modo Directo)');
+                setTimeout(() => setSuccessMessage(''), 2000);
             } catch (e) {
-                setError(e.message);
+                setError(`Error de conexión: ${err.message}`);
             }
         }
     };
@@ -403,19 +473,61 @@ function ConfigPage() {
                         <section className="config-section">
                             <div className="section-header">
                                 <h2>Documentos de Contexto</h2>
-                                <label className="add-button" style={{ cursor: 'pointer' }}>
-                                    + Subir Archivo
-                                    <input
-                                        type="file"
-                                        accept=".txt,.md"
-                                        onChange={handleUploadDocument}
-                                        style={{ display: 'none' }}
-                                    />
-                                </label>
+                                <div className="button-group">
+                                    <button
+                                        className="analyze-button"
+                                        onClick={handleAnalyzeDocuments}
+                                        disabled={isAnalyzing}
+                                    >
+                                        {isAnalyzing ? 'Procesando...' : 'Analizar Duplicados'}
+                                    </button>
+                                    <button
+                                        className="summarize-button"
+                                        onClick={handleSummarizeDocuments}
+                                        disabled={isAnalyzing}
+                                    >
+                                        {isAnalyzing ? '...' : 'Resumir para IA'}
+                                    </button>
+                                    <label className="add-button upload-button">
+                                        + Subir Archivo
+                                        <input
+                                            type="file"
+                                            accept=".txt,.md"
+                                            onChange={handleUploadDocument}
+                                            style={{ display: 'none' }}
+                                        />
+                                    </label>
+                                </div>
                             </div>
                             <p className="section-description">
                                 Archivos que el asistente usa como contexto. Haz clic en un documento para editarlo.
                             </p>
+
+                            <div className="analysis-section" style={{ marginBottom: '20px' }}>
+                                {analysisResult && (
+                                    <div className="analysis-result" style={{
+                                        marginTop: '15px',
+                                        padding: '15px',
+                                        background: 'rgba(255, 255, 255, 0.05)',
+                                        borderRadius: '8px',
+                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                        color: '#e0e0e0',
+                                        whiteSpace: 'pre-wrap',
+                                        lineHeight: '1.6'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                            <h3 style={{ margin: 0, color: '#c77dff' }}>Resultado del Análisis:</h3>
+                                            <button
+                                                onClick={() => setAnalysisResult(null)}
+                                                style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer' }}
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                        {analysisResult}
+                                    </div>
+                                )}
+                            </div>
 
                             {editingDoc ? (
                                 <div className="document-editor">
@@ -969,16 +1081,16 @@ function ConfigPage() {
 
                             <div className="integrations-grid">
                                 {[
-                                    { key: 'avatar', label: 'Avatar' },
-                                    { key: 'base', label: 'Base' },
-                                    { key: 'calendar', label: 'Calendar' },
-                                    { key: 'data', label: 'Data' },
-                                    { key: 'iot', label: 'IoT' },
-                                    { key: 'llm', label: 'LLM' },
-                                    { key: 'media', label: 'Media' },
-                                    { key: 'recognition', label: 'Recognition' },
-                                    { key: 'tts', label: 'TTS' },
-                                    { key: 'whatsapp', label: 'WhatsApp' }
+                                    { key: 'Avatar', label: 'Avatar' },
+                                    { key: 'Base', label: 'Base' },
+                                    { key: 'Calendar', label: 'Calendar' },
+                                    { key: 'Data', label: 'Data' },
+                                    { key: 'IoT', label: 'IoT' },
+                                    { key: 'LLM', label: 'LLM' },
+                                    { key: 'Media', label: 'Media' },
+                                    { key: 'Recognition', label: 'Recognition' },
+                                    { key: 'TTS', label: 'TTS' },
+                                    { key: 'WhatsApp', label: 'WhatsApp' }
                                 ].map(service => (
                                     <div key={service.key} className="integration-card">
                                         <div className="integration-header">

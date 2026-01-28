@@ -67,6 +67,9 @@ export class WhatsAppService {
                 args: launchArgs
             });
 
+            console.log(`[WhatsApp] Navegador lanzado. PID: ${this.browser.process()?.pid}`);
+
+
             this.page = await this.browser.newPage();
 
             // Configurar viewport
@@ -87,7 +90,12 @@ export class WhatsAppService {
             console.log('WhatsApp Web cargado, esperando autenticación...');
 
         } catch (error) {
-            console.error('Error inicializando WhatsApp service:', error);
+            console.error('[WhatsApp] CRITICAL Error inicializando WhatsApp service:', error);
+            console.error('[WhatsApp] Detalles del error:', {
+                message: error.message,
+                stack: error.stack,
+                sessionPath: this.sessionPath
+            });
             this.isInitializing = false;
             throw error;
         }
