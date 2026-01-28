@@ -43,21 +43,28 @@ export class WhatsAppService {
         try {
             console.log('Iniciando navegador para WhatsApp Web...');
 
-            // Lanzar navegador con sesión persistente
+            // Lanzar navegador con sesión persistente y argumentos robustos para Linux
+            const launchArgs = [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage', // Importante para contenedores/VMs con poca memoria compartida
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--disable-gpu',
+                '--use-fake-ui-for-media-stream', // Bypass mic permission prompt
+                '--disable-extensions',
+                '--disable-features=IsolateOrigins,site-per-process' // Puede ayudar con estabilidad
+            ];
+
+            // Si estamos en Linux, puede ser útil especificar explícitamente la ruta si no funciona la descargada
+            // const executablePath = process.platform === 'linux' ? '/usr/bin/google-chrome' : undefined;
+
             this.browser = await puppeteer.launch({
                 executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-                headless: this.headless,
+                headless: this.headless ? 'new' : false, // 'new' es el modo headless moderno recomendo
                 userDataDir: this.sessionPath,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--disable-gpu',
-                    '--use-fake-ui-for-media-stream' // Bypass mic permission prompt
-                ]
+                args: launchArgs
             });
 
             this.page = await this.browser.newPage();
@@ -65,12 +72,10 @@ export class WhatsAppService {
             // Configurar viewport
             await this.page.setViewport({ width: 1280, height: 720 });
 
-            // Configurar viewport
-            await this.page.setViewport({ width: 1280, height: 720 });
-
-            // Configurar user agent
+            // Configurar user agent persistente (Linux/Windows) para evitar detección
+            // Usamos uno de Windows moderno que suele ser más "confiable" para WhatsApp Web
             await this.page.setUserAgent(
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
             );
 
             console.log('Navegando a WhatsApp Web...');
