@@ -164,7 +164,7 @@ export default function Avatar3D({
     });
 
     return (
-        <group ref={group} position={[0, -4.5, 0]} scale={3}>
+        <group ref={group} position={[0, -4.5, 0]} scale={3} rotation={[0, Math.PI / -3, 0]}>
             <primitive object={scene} />
         </group>
     );

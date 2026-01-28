@@ -378,6 +378,34 @@ app.post('/api/iot/devices/:id/:action', async (req, res) => {
     res.json(result);
 });
 
+// Proxy para acciones IoT (URL simple)
+app.post('/api/iot/action', async (req, res) => {
+    const { url } = req.body;
+    if (!url) {
+        return res.status(400).json({ error: 'URL is required' });
+    }
+
+    console.log(`[IoT Proxy] Executing GET ${url}`);
+
+    try {
+        // Usar fetch nativo (Node 18+)
+        const response = await fetch(url);
+
+        if (response.ok) {
+            res.json({ success: true, message: 'Action executed successfully' });
+        } else {
+            console.warn(`[IoT Proxy] Error executing action: ${response.status} ${response.statusText}`);
+            // No fallar completamente si el dispositivo no devuelve JSON o 200 estricto, 
+            // pero informar status. Muchos dispositivos IoT antiguos devuelven texto plano.
+            res.json({ success: response.ok, status: response.status });
+        }
+    } catch (error) {
+        console.error('[IoT Proxy] Error:', error.message);
+        // Si falla la conexión, retornar error pero 200 en http para que el frontend lo maneje
+        res.json({ success: false, error: error.message });
+    }
+});
+
 // Historial de comandos IoT
 app.get('/api/iot/history', (req, res) => {
     const iotService = getIoTService();

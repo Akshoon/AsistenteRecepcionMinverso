@@ -922,7 +922,7 @@ function HomePage() {
           <Canvas
             shadows={false}
             dpr={[1, 1.5]}
-            camera={{ position: [0, 0.5, 5], fov: 40, near: 0.01 }}
+            camera={{ position: [-4.33, 0.5, 2.5], fov: 40, near: 0.01 }}
             gl={{
               antialias: true,
               preserveDrawingBuffer: true,
